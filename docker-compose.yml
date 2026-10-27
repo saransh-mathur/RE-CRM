@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: crm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crm_advanced
+      POSTGRES_USER: crm_admin
+      POSTGRES_PASSWORD: SecureDbPassword2026!
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_admin -d crm_advanced"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: crm_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crm_fastapi_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://crm_admin:SecureDbPassword2026!@db:5432/crm_advanced
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-super-secret-jwt-key-32-chars-minimum}
+      META_APP_SECRET: ${META_APP_SECRET:-mock_meta_app_secret}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-secure_verify_token_crm_2026}
+      SLA_FIRST_RESPONSE_MINUTES: 15
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: crm_react_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:

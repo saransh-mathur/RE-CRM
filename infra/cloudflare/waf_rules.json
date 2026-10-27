@@ -1,0 +1,50 @@
+{
+  "cloudflare_security_configuration": {
+    "zone": "clientproperties.com",
+    "ssl": {
+      "mode": "strict",
+      "authenticated_origin_pulls": true,
+      "min_tls_version": "1.3"
+    },
+    "waf_managed_rulesets": [
+      {
+        "name": "Cloudflare Managed Ruleset",
+        "action": "block",
+        "description": "Protects against OWASP Top 10, SQL Injection, and Remote Code Execution"
+      },
+      {
+        "name": "Cloudflare Attack Analysis & Score",
+        "action": "managed_challenge",
+        "description": "Dynamic machine learning score for suspicious automated bot traffic"
+      }
+    ],
+    "rate_limiting_rules": [
+      {
+        "description": "Protect CRM Login from Credential Stuffing",
+        "expression": "(http.request.uri.path eq \"/api/v1/auth/login\" and http.request.method eq \"POST\")",
+        "action": "block",
+        "period": 60,
+        "requests_per_period": 10
+      },
+      {
+        "description": "Protect Lead Ingestion from Flooding & Denial of Service",
+        "expression": "(http.request.uri.path contains \"/api/v1/leads\" and http.request.method in {\"POST\" \"GET\"})",
+        "action": "managed_challenge",
+        "period": 60,
+        "requests_per_period": 60
+      }
+    ],
+    "bot_management": {
+      "turnstile": {
+        "enabled": true,
+        "mode": "invisible",
+        "enforced_on_endpoints": ["/api/v1/webhooks/public-inquiry"]
+      },
+      "fight_mode": true
+    },
+    "anti_takedown_policies": {
+      "origin_ip_masking": "Strictly concealed behind Cloudflare Anycast IPs",
+      "abuse_handling": "Decoupled marketing edge prevents CRM backend disruption during false complaints"
+    }
+  }
+}
