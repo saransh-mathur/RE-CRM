@@ -15,8 +15,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Explicitly never ignore frontend source
+!frontend/src/lib/
 parts/
 sdist/
 var/
@@ -24,6 +24,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.venv*/
 venv/
 ENV/
 
