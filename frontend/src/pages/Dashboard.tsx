@@ -421,7 +421,7 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
-            <main style={{ flex: 1, padding: "clamp(16px, 2vw, 24px)", maxWidth: "1360px", width: "100%" }}>
+            <main style={{ flex: 1, padding: "clamp(16px, 2vw, 28px)", width: "100%" }}>
               {isOwner ? (
                 <AdminDashboard
                   user={user}
