@@ -28,8 +28,11 @@ echo "[2/3] Starting FastAPI Backend on http://localhost:8000 ..."
 BACKEND_PID=$!
 
 echo "[3/3] Starting React CRM Portal on http://localhost:3000 ..."
-cd "$PROJECT_ROOT/frontend"
-npm run dev -- --host 0.0.0.0 --port 3000 &
+if [ ! -d "$PROJECT_ROOT/node_modules" ] && [ ! -d "$PROJECT_ROOT/frontend/node_modules" ]; then
+    echo "[!] Installing frontend dependencies (first-time setup)..."
+    npm install
+fi
+npm run dev &
 FRONTEND_PID=$!
 
 trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT INT TERM

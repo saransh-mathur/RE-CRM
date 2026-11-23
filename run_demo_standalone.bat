@@ -1,12 +1,17 @@
 @echo off
-title Apex Sovereign CRM - Standalone Demo Launcher (No Backend)
+title Absolute Assets CRM - Standalone Launcher (No Backend)
 echo =================================================================
-echo   APEX SOVEREIGN CRM - STANDALONE DEMO LAUNCHER (NO BACKEND)
+echo   ABSOLUTE ASSETS CRM - STANDALONE LAUNCHER (NO BACKEND NEEDED)
 echo =================================================================
 echo.
-echo Launching React CRM Web Portal on http://localhost:3000 ...
-echo Standalone Mock Engine active with complete enterprise demo data.
+cd /d "%~dp0"
+if not exist "node_modules" if not exist "frontend\node_modules" (
+    echo [*] Installing frontend dependencies ^(first-time setup^)...
+    call npm install
+    echo.
+)
+echo Launching CRM Web Portal on http://localhost:3000 ...
+echo Pre-loaded with demo leads, ad sources, agent activity, and properties.
 echo.
-cd "%~dp0frontend"
-npm run dev -- --port 3000
+call npm run dev
 pause

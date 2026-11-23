@@ -1,103 +1,233 @@
-# Enterprise Real Estate CRM, Meta Lead Engine & DLP Platform
+# Absolute Assets — Real Estate CRM, Ad Lead Tracker & DLP Platform
 
-A high-performance, enterprise-grade Real Estate CRM engineered to solve **omnichannel lead ingestion from Meta (Facebook & Instagram)**, **rigorous Data Loss Prevention (DLP)**, **GPS & working hours telemetry**, and **anti-takedown/cyberattack-proof cloud hosting**.
+A clean, easy-to-use Real Estate CRM designed for brokerages and sales teams to manage property leads, track incoming advertisement leads across **Meta / Facebook, WhatsApp, Instagram, LinkedIn, Google Ads, and Website**, monitor **every agent activity**, and protect client contact data with built-in **Data Loss Prevention (DLP)**.
 
 ---
 
-## 🚀 One-Click Dealer Demo Launcher
+## Key Features
 
-### Option A: Standalone Demo Mode (Zero Backend Required)
-Run completely offline with pre-loaded enterprise dummy data, full persona switching, real-time SLA countdown timers, Anti-Brokerage Theft Radar, and simulated Meta lead ingestion:
+- **Dashboard Analytics**: Interactive **Lead Status Breakdown** pie chart, **Ad Leads** graph (`By Platform` and `Last 7 Days`), **Lead Summary** tiles, **Call Details** (`Today`, `Yesterday`, `Weekly`, `All`), and a live **Recent Agent Activity** feed.
+- **Manage Leads & Lead Preview Drawer**: Table-first lead view (with a 1-click **Cards** toggle), quick status tabs (`All Leads`, `My Leads`, `Follow-Up`, `Site Visit Done`, `Call Not Pick`, `Booked`), search and ad-source filters, manual **`+ Add Lead`** modal, and a right-side **Lead Preview** slide-over drawer (`Overview`, `Activity`, `Notes`, masked click-to-call, inline status & agent updates).
+- **Multi-Channel Ad Tracking**: Dedicated **Ad Sources** view with lead counts, conversion rates, campaign attribution, and 1-click simulated lead ingestion for **Meta, WhatsApp, Instagram, LinkedIn, and Google Ads**.
+- **Agent Activity Tracking**: Per-agent performance scorecards, clickable per-agent activity timelines, call logs, attendance/punch-in tracking, and follow-up/inactivity alerts with direct lead reassignment.
+- **Properties & Streamlined Settings**: Curated Gurugram & Delhi NCR property catalog plus a simplified 3-card **Settings** screen covering Ad Platforms, Team Access, and Lead Protection.
+- **Built-in DLP & Security Controls**: Masked customer phone numbers, virtual CTI click-to-call logging, export approval governance, and watermark/copy protection for agent sessions.
 
-- **Linux / Mac**:
+---
+
+## Prerequisites
+
+- **Standalone Frontend (Recommended / Fastest)**: [Node.js 18+](https://nodejs.org/) (includes `npm`)
+- **Full-Stack Mode (Optional Backend)**: [Python 3.11+](https://www.python.org/downloads/)
+- **Docker Mode (Optional)**: [Docker & Docker Compose](https://docs.docker.com/get-docker/)
+
+---
+
+## Quick Start (Standalone Mode — Zero Backend Required)
+
+The frontend includes a built-in standalone mock API engine pre-loaded with demo leads, ad campaigns, call logs, agent activities, and properties.
+
+### 1. Clone and Run (Any OS)
+
+```bash
+git clone <your-repo-url>
+cd <repo-folder>
+npm install
+npm run dev
+```
+
+Open **`http://localhost:3000`** in your browser.
+
+### 2. Or Use the One-Click Launcher Script
+
+First-time setup installs dependencies automatically if `node_modules` is not present:
+
+- **macOS / Linux**:
   ```bash
+  chmod +x run_demo_standalone.sh
   ./run_demo_standalone.sh
   ```
-- **Windows Batch**: Double-click [`run_demo_standalone.bat`](file:///mnt/data/Downloads/Python/RJ%20CRM/CRM%20with%20Tracking/run_demo_standalone.bat)
-- **Direct npm command**:
-  ```bash
-  cd frontend && npm run dev
-  ```
-- Open in Browser: `http://localhost:3000`
+- **Windows**: Double-click `run_demo_standalone.bat` (or run `run_demo_standalone.bat` in Command Prompt).
 
 ---
 
-### Option B: Full Stack Mode (FastAPI Backend + React Frontend)
-Launch both the Python FastAPI backend and React frontend with pre-loaded enterprise database:
+## Full-Stack Setup (FastAPI Backend + React Frontend)
 
-- **Linux / Mac**:
+Use this option when developing or testing against the FastAPI backend, SQLite/PostgreSQL database, and Meta Lead Ads webhook endpoints.
+
+### Option 1: One-Click Full-Stack Script
+
+- **macOS / Linux**:
   ```bash
+  chmod +x run_demo.sh
   ./run_demo.sh
   ```
-- **Windows Batch**: [`run_demo.bat`](file:///mnt/data/Downloads/Python/RJ%20CRM/CRM%20with%20Tracking/run_demo.bat)
-- **PowerShell**:
+- **Windows (PowerShell)**:
   ```powershell
   .\run_demo.ps1
   ```
+- **Windows (Batch)**: Double-click `run_demo.bat`
 
-Once launched:
-- **CRM Web Portal**: `http://localhost:3000`
-- **FastAPI Interactive Docs**: `http://localhost:8000/docs`
+Services started:
+- **Web Portal**: `http://localhost:3000`
+- **FastAPI Interactive Docs (Swagger)**: `http://localhost:8000/docs`
 
----
+### Option 2: Manual Full-Stack Setup
 
-## 👥 Demo Personas Available in Dropdown
+1. **Configure environment variables** (optional — defaults to local async SQLite `crm_advanced.db`):
+   ```bash
+   cp .env.example .env
+   ```
 
-The CRM features a **Demo Persona Switcher** in the top navigation bar so you can instantly switch roles in front of the dealer to demonstrate role-based access control (RBAC):
+2. **Set up and start the FastAPI backend**:
+   ```bash
+   python3 -m venv backend/.venv
+   # macOS / Linux:
+   source backend/.venv/bin/activate
+   # Windows PowerShell:
+   # .\backend\.venv\Scripts\Activate.ps1
 
-| Persona | Role | Territory | Device Environment | Login Credentials |
-| :--- | :--- | :--- | :--- | :--- |
-| **Rahul Verma** | Senior Consultant | Downtown Skyline | 💻 Laptop (Dell XPS 15) | `rahul.verma@apexrealty.com` / `AgentPass2026!` |
-| **Ananya Patel** | Luxury Villa Specialist | Palm Grove Estates | 📱 Mobile Phone (iPhone 15 Pro) | `ananya.patel@apexrealty.com` / `AgentPass2026!` |
-| **Vikram Malhotra** | Commercial Specialist | Marina Bay Promenade | 📱 Mobile Phone (Galaxy S24) | `vikram.malhotra@apexrealty.com` / `AgentPass2026!` |
-| **Priya Sharma** | Sales Manager | All Sectors | 💻 Laptop (ThinkPad X1) | `priya.sharma@apexrealty.com` / `ManagerPass2026!` |
-| **Sarah Jenkins** | Sales Director / Admin | Corporate HQ | 💻 Laptop (MacBook Pro M3) | `admin@apexrealty.com` / `AdminPass2026!` |
+   pip install -r backend/requirements.txt
+   PYTHONPATH=backend python backend/app/seed_demo_data.py
+   PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
 
----
+3. **In a second terminal, start the React frontend**:
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-## 🏢 Prime Properties Catalog Pre-Loaded
+### Option 3: Docker Compose (PostgreSQL + Redis + FastAPI + Nginx Frontend)
 
-The inventory includes **8 high-ticket residential and commercial assets**:
-1. **The Grand Crest - Sky Villa 401** (4 BHK Sky Villa, ₹4.85 Cr, Downtown Skyline)
-2. **Palm Serenade - Signature Villa 12** (5 BHK Independent Villa, ₹7.25 Cr, Palm Grove Estates)
-3. **Marina Azure - Sea Facing Residence 18B** (3 BHK Luxury Apartment, ₹3.10 Cr, Marina Bay)
-4. **Apex One Corporate Tower - Level 14** (Grade-A Commercial Office, 6,800 sq.ft, ₹8.90 Cr, CBD)
-5. **The Lumina Heights - Duplex Penthouse 28** (4 BHK Penthouse, ₹5.60 Cr, Downtown Skyline)
-6. **Green Valley Sanctuary - Eco Villa 07** (3 BHK Forest Villa, ₹2.45 Cr, Green Valley Hills - `SOLD`)
-7. **The Boulevard Retail Arcade - Unit G-04** (High-Street Retail Store, ₹3.75 Cr, Commercial Hub)
-8. **Elysium Grand - Presidential Suite 32A** (4 BHK Ultra-Luxury, ₹6.40 Cr, Marina Bay)
-
----
-
-## 📋 Pre-Loaded Customer Leads & Scenarios
-
-The CRM is loaded with **18 realistic leads** demonstrating the complete pipeline and DLP controls:
-
-1. **Active 15-Minute SLA Countdown**:
-   - *Aditya Singhania* (₹4.5 Cr - ₹5.5 Cr, Facebook Lead Ad) -> Shows active 15-minute countdown clock.
-   - *Pooja Hegde* (₹3.0 Cr - ₹3.4 Cr, Instagram Reel) -> Shows countdown amber warning (< 3 mins remaining).
-2. **SLA Breach & Management Escalation**:
-   - *Kavita Chawla* (₹6.5 Cr - ₹8.0 Cr, Instagram Story) -> Shows flashing **⚠️ SLA BREACHED** badge to showcase automatic escalation when an agent fails to respond in time.
-3. **Customer PII Masking & Click-to-Call**:
-   - All customer numbers are masked (`+91 98*** **22`).
-   - Clicking **"📞 Masked Call"** connects through a virtual CTI bridge (`bridge_xxx`) without exposing the client's private phone number.
-4. **Four-Eyes Data Export Governance**:
-   - Bulk exports cannot be downloaded without manager approval.
-   - Shows 1 Pending Request and 1 Approved Request with a single-use cryptographic token.
-5. **Field Agent Fleet & GPS Telemetry**:
-   - Displays real-time device type classification (Mobile Phone vs Laptop).
-   - Shows live GPS location breadcrumbs (e.g., Ananya Patel conducting a site inspection at Palm Grove Villa 12).
-   - Security incident ledger detailing thwarted watermark tampering attempts and impossible travel alerts.
-
----
-
-## 🧪 Verification
-
-Run the automated test suite anytime:
 ```bash
-backend\.venv\Scripts\pytest backend\tests -v
+cp .env.example .env
+docker compose up --build
 ```
-Output:
+
+- **Web Portal**: `http://localhost:3000`
+- **FastAPI Docs**: `http://localhost:8000/docs`
+
+Stop and remove containers with:
+```bash
+docker compose down
 ```
-============================= 5 passed in 43.44s =============================
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` if you are running the backend or Docker Compose with custom credentials:
+
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Async SQLAlchemy DB URI (SQLite for local dev, PostgreSQL for Docker/prod) | `sqlite+aiosqlite:///./crm_advanced.db` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `SECRET_KEY` | JWT signing key (min 32 chars in production) | `change-in-production-...` |
+| `META_APP_SECRET` | Meta App Secret for webhook HMAC verification | `replace_with_meta_app_secret` |
+| `META_VERIFY_TOKEN` | Meta webhook verification challenge token | `replace_with_meta_verify_token` |
+| `META_SYSTEM_USER_TOKEN` | Meta Graph API system user token | `replace_with_meta_system_user_token` |
+| `SLA_FIRST_RESPONSE_MINUTES` | First-response SLA threshold in minutes | `15` |
+
+> **Note:** Never commit `.env` with real secrets. `.env` is already listed in `.gitignore`.
+
+---
+
+## Demo Accounts
+
+### Standalone Frontend (Default Mode)
+
+You can switch accounts in 1 click from the top-right account menu or sign in on the login screen:
+
+| Name | Role | Territory | Email | Password |
+| :--- | :--- | :--- | :--- | :--- |
+| **Vikramaditya Singhania** | Owner / Admin | All Gurugram & Delhi NCR | `owner@absoluteassets.in` | `OwnerPass2026!` |
+| **Dhruv Chaudhary** | Sales Agent | Dwarka Expressway & Plots | `dhruv@absoluteassets.in` | `AgentPass2026!` |
+| **Ananya Patel** | Sales Agent | Golf Course Extension & SPR | `ananya@absoluteassets.in` | `AgentPass2026!` |
+| **Vikram Malhotra** | Sales Agent | Sector 57 & Commercial Retail | `vikram@absoluteassets.in` | `AgentPass2026!` |
+| **Karan Mehta** | Sales Agent | DLF Privana & Sohna Road | `karan@absoluteassets.in` | `AgentPass2026!` |
+
+### Backend Database Seed Accounts (`backend/app/seed_demo_data.py`)
+
+When querying FastAPI directly (`/api/v1/auth/login` or Swagger docs):
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Owner** | `owner@apexrealty.com` | `OwnerPass2026!` |
+| **Admin** | `admin@apexrealty.com` | `AdminPass2026!` |
+| **Manager** | `manager@apexrealty.com` | `ManagerPass2026!` |
+| **Agent** | `agent.rahul@apexrealty.com` | `AgentPass2026!` |
+
+---
+
+## Repository Structure
+
+```text
+.
+├── frontend/                   # React + TypeScript + Vite web application
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── analytics/      # Pie Chart, Ad Leads Graph, Ad Sources view
+│   │   │   ├── auth/           # Login & Profile modals
+│   │   │   ├── dashboards/     # Owner/Admin & Sales Agent workspaces
+│   │   │   ├── dlp/            # Watermark, Anti-Copy, Export Approval modals
+│   │   │   ├── layout/         # Collapsible Sidebar & Slim Header
+│   │   │   ├── leads/          # Manage Leads table, Lead Preview Drawer, Add Lead Modal
+│   │   │   ├── properties/     # Property inventory catalog
+│   │   │   ├── settings/       # Simplified 3-card Settings view
+│   │   │   └── telemetry/      # Agent Activity Hub & Call/Device telemetry
+│   │   ├── lib/                # Standalone mock API, analytics helpers, theme, unit tests
+│   │   └── pages/              # Root Dashboard shell
+│   └── Dockerfile
+├── backend/                    # FastAPI + SQLAlchemy async backend
+│   ├── app/
+│   │   ├── api/v1/             # Auth, Leads, Properties, DLP, Export Governance, Meta Webhooks
+│   │   ├── core/               # Config, async DB setup, JWT & PII masking security
+│   │   ├── models/             # SQLAlchemy models
+│   │   ├── schemas/            # Pydantic request/response schemas
+│   │   ├── services/           # Lead routing, anomaly detection, DLP, Meta service
+│   │   └── seed_demo_data.py   # Demo dataset seeder
+│   ├── tests/                  # Pytest backend test suite
+│   └── Dockerfile
+├── infra/cloudflare/           # Sample Nginx origin-cloaking & Cloudflare WAF configs
+├── docker-compose.yml          # Full-stack Docker setup (Postgres, Redis, FastAPI, Frontend)
+├── .env.example                # Environment variable template
+├── package.json                # Root npm workspace scripts (dev, build, lint, test)
+├── run_demo_standalone.sh/.bat # One-click standalone launchers (no backend needed)
+└── run_demo.sh/.ps1/.bat       # One-click full-stack launchers
 ```
+
+---
+
+## Scripts, Tests & Production Build
+
+From the repository root:
+
+```bash
+# Start development server (http://localhost:3000)
+npm run dev
+
+# Run frontend unit tests (lead analytics & API logic)
+npm test
+
+# Type-check with TypeScript
+npm run lint
+
+# Build production bundle (outputs to frontend/dist)
+npm run build
+```
+
+Run backend tests (after activating the Python virtual environment):
+
+```bash
+pytest backend/tests -v
+```
+
+---
+
+## Troubleshooting
+
+- **Port `3000` or `8000` already in use**: Stop any existing Vite/Uvicorn process or pass a different port (e.g., `npm run dev -- --port 3001`).
+- **`npm` command not found**: Install Node.js 18+ from [nodejs.org](https://nodejs.org/) and restart your terminal.
+- **Permission denied when running `./run_demo_standalone.sh` on macOS/Linux**: Run `chmod +x run_demo_standalone.sh run_demo.sh` once, then re-run the script.
+- **Backend `ModuleNotFoundError: No module named 'app'`**: Ensure you run backend commands from the repository root with `PYTHONPATH=backend` set.

@@ -2,17 +2,23 @@
 set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$PROJECT_ROOT/frontend"
+cd "$PROJECT_ROOT"
 
 echo "================================================================="
-echo "  APEX SOVEREIGN CRM - STANDALONE DEMO LAUNCHER (NO BACKEND)"
+echo "  ABSOLUTE ASSETS CRM - STANDALONE LAUNCHER (NO BACKEND NEEDED)"
 echo "================================================================="
 echo ""
-echo "Starting Liquid Glass React CRM Portal on http://localhost:3000 ..."
-echo "All features (Meta Lead Ingestion, SLA Countdown, Anti-Theft Radar,"
-echo "Masked CTI Calling, Export Governance) are pre-loaded with demo data."
+
+if [ ! -d "$PROJECT_ROOT/node_modules" ] && [ ! -d "$PROJECT_ROOT/frontend/node_modules" ]; then
+    echo "[*] Installing frontend dependencies (first-time setup)..."
+    npm install
+    echo ""
+fi
+
+echo "Starting CRM Portal on http://localhost:3000 ..."
+echo "Pre-loaded with demo leads, ad sources, agent activity, and properties."
 echo ""
-echo "Press Ctrl+C to stop the demo server."
+echo "Press Ctrl+C to stop the server."
 echo ""
 
-npm run dev -- --host 0.0.0.0 --port 3000
+npm run dev

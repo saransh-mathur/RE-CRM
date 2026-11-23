@@ -1,11 +1,27 @@
-# Apex Sovereign CRM - One-Click Launcher for Dealer Demo
+# Absolute Assets CRM - Full-Stack Launcher (Windows PowerShell)
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  APEX SOVEREIGN REAL ESTATE CRM - LIQUID GLASS DEALER PROTOTYPE" -ForegroundColor Cyan
+Write-Host "  ABSOLUTE ASSETS REAL ESTATE CRM - FULL-STACK LAUNCHER" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Populate enterprise demo data
-Write-Host "[1/3] Seeding Enterprise Anti-Brokerage Theft & Lead Dataset..." -ForegroundColor Yellow
+Set-Location $PSScriptRoot
+
+# Ensure Python virtual environment exists
+if (-not (Test-Path "backend\.venv\Scripts\python.exe")) {
+    Write-Host "[!] Creating Python virtual environment in backend\.venv..." -ForegroundColor Yellow
+    python -m venv backend\.venv
+    & "backend\.venv\Scripts\pip.exe" install --upgrade pip
+    & "backend\.venv\Scripts\pip.exe" install -r backend\requirements.txt
+}
+
+# Ensure frontend dependencies exist
+if (-not (Test-Path "node_modules") -and -not (Test-Path "frontend\node_modules")) {
+    Write-Host "[!] Installing frontend dependencies..." -ForegroundColor Yellow
+    npm install
+}
+
+# 1. Populate demo data
+Write-Host "[1/3] Seeding backend demo dataset..." -ForegroundColor Yellow
 $env:PYTHONPATH="backend"
 & "backend\.venv\Scripts\python.exe" backend\app\seed_demo_data.py
 
@@ -13,8 +29,8 @@ Write-Host ""
 Write-Host "[2/3] Starting FastAPI Backend on http://localhost:8000 ..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot'; `$env:PYTHONPATH='backend'; backend\.venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000 --reload"
 
-Write-Host "[3/3] Starting Liquid Glass React CRM Portal on http://localhost:3000 ..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\frontend'; npm run dev -- --port 3000"
+Write-Host "[3/3] Starting React CRM Portal on http://localhost:3000 ..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot'; npm run dev"
 
 Write-Host ""
 Write-Host "=================================================================" -ForegroundColor Green

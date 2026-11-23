@@ -9,6 +9,7 @@
     "dev": "npm run dev --workspace=crm-advanced-frontend",
     "build": "npm run build --workspace=crm-advanced-frontend",
     "preview": "npm run preview --workspace=crm-advanced-frontend",
-    "lint": "npm run lint --workspace=crm-advanced-frontend"
+    "lint": "npm run lint --workspace=crm-advanced-frontend",
+    "test": "npx --yes tsx --test frontend/src/lib/leadAnalytics.test.ts frontend/src/lib/mockApi.test.ts"
   }
 }
