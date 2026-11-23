@@ -27,21 +27,34 @@ import { AdChannel, getAdChannelMeta, LeadDisposition } from "../lib/leadAnalyti
 export const Dashboard: React.FC = () => {
   const backendUrl = "http://localhost:8000";
 
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    try {
+      const saved = typeof localStorage !== "undefined" ? localStorage.getItem("aa_crm_theme_mode") : null;
+      return saved === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
   const [activeSection, setActiveSection] = useState<AppSection>("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const theme = themes[themeMode];
 
   const handleToggleTheme = () => {
-    setThemeMode((prev) => (prev === "light" ? "dark" : "light"));
+    setThemeMode((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem("aa_crm_theme_mode", next);
+      } catch {}
+      return next;
+    });
   };
 
-  // Auth State
+  // Auth State (hydrated from persisted mockStore.currentUser so refreshes retain active role)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isAddLeadOpen, setIsAddLeadOpen] = useState<boolean>(false);
-  const [token, setToken] = useState<string>("mock_jwt_token_OWNER-01");
+  const [token, setToken] = useState<string>(() => `mock_jwt_token_${mockStore.currentUser.employee_code}`);
   const [user, setUser] = useState<{
     id: string;
     fullName: string;
@@ -49,14 +62,14 @@ export const Dashboard: React.FC = () => {
     role: string;
     isPunchedIn: boolean;
     mfaEnabled?: boolean;
-  }>({
-    id: "usr-owner-01",
-    fullName: "Vikramaditya Singhania",
-    employeeCode: "OWNER-01",
-    role: "OWNER",
-    isPunchedIn: true,
-    mfaEnabled: true
-  });
+  }>(() => ({
+    id: mockStore.currentUser.id,
+    fullName: mockStore.currentUser.full_name,
+    employeeCode: mockStore.currentUser.employee_code,
+    role: mockStore.currentUser.role,
+    isPunchedIn: mockStore.currentUser.is_punched_in,
+    mfaEnabled: mockStore.currentUser.mfa_enabled
+  }));
 
   const [leads, setLeads] = useState<LeadItem[]>(() => {
     return mockStore.leads && mockStore.leads.length > 0 ? mockStore.leads : getInitialMockLeads();

@@ -212,7 +212,7 @@ export const MOCK_PROPERTIES: PropertyItem[] = [
     status: "AVAILABLE",
     roi_potential: "9.8% Assured Pre-Leased Yield",
     amenities: JSON.stringify(["Pre-Leased Luxury Brands", "Triple-Height Atrium", "2.5 Lakh Catchment", "Valet Drop-Off", "RERA Verified"]),
-    image_url: "/images/gurugram_commercial_plaza.jpg",
+    image_url: "/images/m3m_paragon_atrium.jpg",
     featured: true
   },
   {
@@ -246,7 +246,7 @@ export const MOCK_PROPERTIES: PropertyItem[] = [
     status: "AVAILABLE",
     roi_potential: "14.5% 3-Yr Growth",
     amenities: JSON.stringify(["63,000 sq.ft Clubhouse", "Private Forest Trail", "Infinity Edge Pool", "Smart Access Control"]),
-    image_url: "/images/gurugram_luxury_towers.jpg",
+    image_url: "/images/godrej_forest_residences.jpg",
     featured: false
   },
   {
@@ -280,7 +280,7 @@ export const MOCK_PROPERTIES: PropertyItem[] = [
     status: "AVAILABLE",
     roi_potential: "15% Expressway Upside",
     amenities: JSON.stringify(["Corner Sunlit Deck", "Italian Marble Flooring", "Private Cinema Lounge", "EV Charging Bays"]),
-    image_url: "/images/gurugram_penthouse_interior.jpg",
+    image_url: "/images/godrej_vista_skydeck.jpg",
     featured: false
   },
   {
@@ -297,7 +297,7 @@ export const MOCK_PROPERTIES: PropertyItem[] = [
     status: "SOLD",
     roi_potential: "10.2% Leased ROI",
     amenities: JSON.stringify(["Operational High-Street", "INOX Multiplex Anchor", "Managed Serviced Suites", "High Footfall Plaza"]),
-    image_url: "/images/gurugram_commercial_plaza.jpg",
+    image_url: "/images/aipl_joy_street_plaza.jpg",
     featured: false
   }
 ];

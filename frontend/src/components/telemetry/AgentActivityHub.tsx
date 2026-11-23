@@ -374,17 +374,19 @@ export const AgentActivityHub: React.FC<AgentActivityHubProps> = ({
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "6px 12px",
                     fontSize: "0.78rem",
                     color: theme.textSecondary,
                     paddingTop: "8px",
                     borderTop: `1px solid ${theme.borderSubtle}`
                   }}
                 >
-                  <span>
+                  <span style={{ lineHeight: 1.45 }}>
                     <strong style={{ color: theme.textPrimary }}>{stats?.callsMade ?? 0}</strong> calls ·{" "}
                     <strong style={{ color: theme.textPrimary }}>{stats?.leadsAssigned ?? 0}</strong> leads
                     {hasAlert && (
-                      <span style={{ color: theme.danger, fontWeight: 700 }}>
+                      <span style={{ color: theme.danger, fontWeight: 700, whiteSpace: "nowrap" }}>
                         {" "}· {stats?.alertsCount} alert{stats?.alertsCount === 1 ? "" : "s"}
                       </span>
                     )}
@@ -400,7 +402,8 @@ export const AgentActivityHub: React.FC<AgentActivityHubProps> = ({
                       fontSize: "0.76rem",
                       fontWeight: 700,
                       cursor: "pointer",
-                      whiteSpace: "nowrap"
+                      whiteSpace: "nowrap",
+                      marginLeft: "auto"
                     }}
                   >
                     Details

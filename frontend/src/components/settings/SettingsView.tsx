@@ -58,7 +58,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <section style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
           <div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, color: theme.textPrimary }}>{user.fullName}</div>
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, color: theme.textPrimary, margin: 0 }}>{user.fullName}</h3>
             <div style={{ fontSize: "0.82rem", color: theme.textMuted, marginTop: "2px" }}>
               {isOwner ? "Agency Owner" : "Sales Agent"} · {user.employeeCode}
             </div>
@@ -142,9 +142,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Card 2: Shift Attendance */}
       <section style={cardStyle}>
-        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: theme.textPrimary }}>
+        <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: theme.textPrimary, margin: 0 }}>
           Daily Attendance
-        </div>
+        </h3>
         <PunchClockWidget
           initialPunchedIn={user.isPunchedIn}
           token={token}
@@ -156,9 +156,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Card 3: Display & Data */}
       <section style={cardStyle}>
-        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: theme.textPrimary }}>
+        <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: theme.textPrimary, margin: 0 }}>
           Display &amp; Data
-        </div>
+        </h3>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             type="button"

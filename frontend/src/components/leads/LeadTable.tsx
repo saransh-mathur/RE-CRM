@@ -280,108 +280,105 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: "10px"
+          gap: "8px"
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", flex: "1 1 360px" }}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Search by name, mobile number, source, or agent..."
-            aria-label="Search leads"
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setCurrentPage(1);
+          }}
+          placeholder="Search by name, mobile number, source, or agent..."
+          aria-label="Search leads"
+          style={{
+            flex: "1 1 230px",
+            minWidth: "min(100%, 210px)",
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${theme.border}`,
+            backgroundColor: theme.cardBg,
+            color: theme.textPrimary,
+            fontSize: "0.84rem",
+            outline: "none"
+          }}
+        />
+
+        <select
+          aria-label="Filter by ad source"
+          value={filterChannel}
+          onChange={(e) => {
+            setFilterChannel(e.target.value as AdChannel | "ALL");
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${filterChannel !== "ALL" ? theme.accentPrimary : theme.border}`,
+            backgroundColor: theme.cardBg,
+            color: theme.textPrimary,
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+        >
+          <option value="ALL">All Ad Sources</option>
+          {AD_CHANNEL_META.map((ch) => (
+            <option key={ch.key} value={ch.key}>
+              {ch.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Filter by lead status"
+          value={filterDisposition}
+          onChange={(e) => {
+            setFilterDisposition(e.target.value as LeadDisposition | "ALL");
+            setSummaryFilter(null);
+            setCurrentPage(1);
+          }}
+          style={{
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${filterDisposition !== "ALL" ? theme.accentPrimary : theme.border}`,
+            backgroundColor: theme.cardBg,
+            color: theme.textPrimary,
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+        >
+          <option value="ALL">All Statuses</option>
+          {DISPOSITION_META.map((d) => (
+            <option key={d.key} value={d.key}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={handleResetFilters}
             style={{
-              flex: "1 1 240px",
-              minWidth: "200px",
-              padding: "9px 12px",
+              padding: "8px 11px",
               borderRadius: "8px",
               border: `1px solid ${theme.border}`,
-              backgroundColor: theme.cardBg,
-              color: theme.textPrimary,
-              fontSize: "0.84rem",
-              outline: "none"
-            }}
-          />
-
-          <select
-            aria-label="Filter by ad source"
-            value={filterChannel}
-            onChange={(e) => {
-              setFilterChannel(e.target.value as AdChannel | "ALL");
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: "9px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${filterChannel !== "ALL" ? theme.accentPrimary : theme.border}`,
-              backgroundColor: theme.cardBg,
-              color: theme.textPrimary,
-              fontSize: "0.82rem",
+              backgroundColor: theme.cardBgSecondary,
+              color: theme.textSecondary,
+              fontSize: "0.8rem",
               fontWeight: 600,
               cursor: "pointer"
             }}
           >
-            <option value="ALL">All Ad Sources</option>
-            {AD_CHANNEL_META.map((ch) => (
-              <option key={ch.key} value={ch.key}>
-                {ch.label}
-              </option>
-            ))}
-          </select>
+            Reset
+          </button>
+        )}
 
-          <select
-            aria-label="Filter by lead status"
-            value={filterDisposition}
-            onChange={(e) => {
-              setFilterDisposition(e.target.value as LeadDisposition | "ALL");
-              setSummaryFilter(null);
-              setCurrentPage(1);
-            }}
-            style={{
-              padding: "9px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${filterDisposition !== "ALL" ? theme.accentPrimary : theme.border}`,
-              backgroundColor: theme.cardBg,
-              color: theme.textPrimary,
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            <option value="ALL">All Statuses</option>
-            {DISPOSITION_META.map((d) => (
-              <option key={d.key} value={d.key}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              style={{
-                padding: "8px 11px",
-                borderRadius: "8px",
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.cardBgSecondary,
-                color: theme.textSecondary,
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
-            >
-              Reset
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "auto" }}>
           {onRequestExport && (
             <button
               type="button"

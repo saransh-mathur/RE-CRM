@@ -126,8 +126,8 @@ export const PropertyList: React.FC<PropertyListProps> = ({ properties, theme, o
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-          gap: "22px"
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))",
+          gap: "20px"
         }}
       >
         {filtered.map((p) => {

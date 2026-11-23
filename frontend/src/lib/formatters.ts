@@ -41,3 +41,24 @@ export const formatBudgetRange = (min?: number | null, max?: number | null): str
   }
   return "Budget On Request";
 };
+
+/**
+ * Masks an Indian mobile number for DLP display (e.g. "+919876543210" -> "+91 98*** **10").
+ * Strips leading country code ("91") or trunk prefix ("0") so subscriber digits are masked accurately.
+ */
+export const maskIndianPhoneNumber = (phone?: string | null): string => {
+  const digits = String(phone || "").replace(/\D/g, "");
+  let subscriber = digits;
+
+  if (subscriber.length > 10 && subscriber.startsWith("91")) {
+    subscriber = subscriber.slice(2);
+  } else if (subscriber.length === 11 && subscriber.startsWith("0")) {
+    subscriber = subscriber.slice(1);
+  }
+
+  if (subscriber.length >= 4) {
+    return `+91 ${subscriber.slice(0, 2)}*** **${subscriber.slice(-2)}`;
+  }
+
+  return `+91 98*** **${Math.floor(10 + Math.random() * 89)}`;
+};

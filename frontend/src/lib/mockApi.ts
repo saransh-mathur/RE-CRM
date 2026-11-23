@@ -14,8 +14,9 @@ import {
 } from "./mockData";
 import { LeadItem } from "../components/leads/LeadTable";
 import { dispositionToPipelineStatus, LeadDisposition } from "./leadAnalytics";
+import { maskIndianPhoneNumber } from "./formatters";
 
-const SEED_SCHEMA_VERSION = "aa_v3_simplified_channels";
+const SEED_SCHEMA_VERSION = "aa_v4_unique_property_photos";
 
 // In-memory state for demonstration
 class MockStore {
@@ -106,6 +107,11 @@ class MockStore {
         } else {
           this.users = { ...MOCK_USERS };
         }
+
+        const savedCurrentEmail = localStorage.getItem("apex_crm_current_user_email");
+        if (savedCurrentEmail && this.users[savedCurrentEmail]) {
+          this.currentUser = this.users[savedCurrentEmail];
+        }
       } else {
         this.leads = getInitialMockLeads();
       }
@@ -125,6 +131,9 @@ class MockStore {
         localStorage.setItem("apex_crm_mock_calls", JSON.stringify(this.callLogs));
         localStorage.setItem("apex_crm_mock_activities", JSON.stringify(this.activities));
         localStorage.setItem("apex_crm_mock_users", JSON.stringify(this.users));
+        if (this.currentUser?.email) {
+          localStorage.setItem("apex_crm_current_user_email", this.currentUser.email);
+        }
       }
     } catch (e) {}
   }
@@ -286,6 +295,7 @@ async function handleMockApiRoute(
       }
 
       if (user.mfa_enabled || user.mfa_enforced) {
+        mockStore.saveState();
         return mockResponse({
           mfa_required: true,
           access_token: `mock_jwt_token_${user.employee_code}`,
@@ -562,11 +572,7 @@ async function handleMockApiRoute(
         return mockResponse({ detail: "Full name is required." }, 400);
       }
 
-      const rawPhone = String(body.phone || "").replace(/\D/g, "");
-      const maskedPhone =
-        rawPhone.length >= 4
-          ? `+91 ${rawPhone.slice(0, 2)}*** **${rawPhone.slice(-2)}`
-          : `+91 98*** **${Math.floor(10 + Math.random() * 89)}`;
+      const maskedPhone = maskIndianPhoneNumber(body.phone);
 
       const assignedAgent = String(body.assigned_agent_name || "Dhruv Chaudhary").trim();
       const source = String(body.source || "WEBSITE_DIRECT").trim();

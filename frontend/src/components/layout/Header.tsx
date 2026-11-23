@@ -195,7 +195,9 @@ export const Header: React.FC<HeaderProps> = ({
               position: "absolute",
               top: "calc(100% + 8px)",
               right: 0,
-              width: "290px",
+              width: "min(296px, calc(100vw - 24px))",
+              maxHeight: "calc(100vh - 76px)",
+              overflowY: "auto",
               backgroundColor: theme.cardBgElevated,
               border: `1px solid ${theme.border}`,
               borderRadius: "12px",
@@ -214,42 +216,59 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-              <label
-                htmlFor="header-role-select"
-                style={{ fontSize: "0.74rem", fontWeight: 600, color: theme.textSecondary }}
-              >
-                Switch User View
-              </label>
-              <select
-                id="header-role-select"
-                value={employeeCode}
-                onChange={(e) => {
-                  const code = e.target.value;
-                  if (code === "OWNER-01") onPersonaChange("owner@absoluteassets.in", "OwnerPass2026!");
-                  else if (code === "EXE-204") onPersonaChange("dhruv@absoluteassets.in", "AgentPass2026!");
-                  else if (code === "EXE-208") onPersonaChange("ananya@absoluteassets.in", "AgentPass2026!");
-                  else if (code === "EXE-215") onPersonaChange("vikram@absoluteassets.in", "AgentPass2026!");
-                  else if (code === "EXE-210") onPersonaChange("karan@absoluteassets.in", "AgentPass2026!");
-                  setMenuOpen(false);
-                }}
-                style={{
-                  backgroundColor: theme.cardBgSecondary,
-                  color: theme.textPrimary,
-                  border: `1px solid ${theme.border}`,
-                  padding: "7px 10px",
-                  borderRadius: "8px",
-                  fontSize: "0.82rem",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                <option value="OWNER-01">Vikramaditya (Owner)</option>
-                <option value="EXE-204">Dhruv Chaudhary (Agent)</option>
-                <option value="EXE-208">Ananya Patel (Agent)</option>
-                <option value="EXE-215">Vikram Malhotra (Agent)</option>
-                <option value="EXE-210">Karan Mehta (Agent)</option>
-              </select>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>
+                Switch Demo Account
+              </div>
+              {[
+                { code: "OWNER-01", name: "Vikramaditya", roleLabel: "Owner", email: "owner@absoluteassets.in", pass: "OwnerPass2026!" },
+                { code: "EXE-204", name: "Dhruv Chaudhary", roleLabel: "Agent", email: "dhruv@absoluteassets.in", pass: "AgentPass2026!" },
+                { code: "EXE-208", name: "Ananya Patel", roleLabel: "Agent", email: "ananya@absoluteassets.in", pass: "AgentPass2026!" },
+                { code: "EXE-215", name: "Vikram Malhotra", roleLabel: "Agent", email: "vikram@absoluteassets.in", pass: "AgentPass2026!" },
+                { code: "EXE-210", name: "Karan Mehta", roleLabel: "Agent", email: "karan@absoluteassets.in", pass: "AgentPass2026!" }
+              ].map((acct) => {
+                const isCurrent = employeeCode === acct.code;
+                return (
+                  <button
+                    key={acct.code}
+                    type="button"
+                    onClick={() => {
+                      onPersonaChange(acct.email, acct.pass);
+                      setMenuOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      width: "100%",
+                      padding: "7px 10px",
+                      borderRadius: "8px",
+                      border: `1px solid ${isCurrent ? theme.goldBorder : "transparent"}`,
+                      backgroundColor: isCurrent ? theme.accentBg : "transparent",
+                      color: isCurrent ? theme.accentPrimary : theme.textPrimary,
+                      fontSize: "0.8rem",
+                      fontWeight: isCurrent ? 700 : 500,
+                      cursor: "pointer",
+                      textAlign: "left"
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {isCurrent ? "✓ " : ""}{acct.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.69rem",
+                        fontWeight: 600,
+                        color: isCurrent ? theme.accentPrimary : theme.textMuted,
+                        flexShrink: 0
+                      }}
+                    >
+                      {acct.roleLabel}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ paddingTop: "10px", borderTop: `1px solid ${theme.borderSubtle}` }}>
