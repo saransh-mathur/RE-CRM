@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface ProfileModalProps {
   user: {
@@ -35,14 +36,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setSaving(true);
     setStatusMessage(null);
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/auth/mfa-toggle`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/auth/mfa-toggle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          email: `${user.fullName.toLowerCase().split(" ")[0]}@apexrealty.com`,
+          email: `${user.fullName.toLowerCase().split(" ")[0]}@absoluteassets.in`,
           enabled: targetState
         })
       });
@@ -198,8 +199,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 padding: "8px 16px",
                 borderRadius: "10px",
                 border: `1px solid ${theme.border}`,
-                backgroundColor: mfaEnabled ? theme.textPrimary : theme.cardBgElevated,
-                color: mfaEnabled ? (theme.bg.includes("#090d16") ? "#000000" : "#ffffff") : theme.textPrimary,
+                backgroundColor: mfaEnabled ? theme.primaryBtnBg : theme.cardBgElevated,
+                color: mfaEnabled ? theme.primaryBtnText : theme.textPrimary,
                 fontWeight: "700",
                 fontSize: "0.78rem",
                 cursor: "pointer",
@@ -278,9 +279,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             style={{
               padding: "9px 22px",
               borderRadius: "10px",
-              border: `1px solid ${theme.border}`,
-              backgroundColor: theme.textPrimary,
-              color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+              border: `1px solid ${theme.goldBorder}`,
+              backgroundColor: theme.primaryBtnBg,
+              color: theme.primaryBtnText,
               fontWeight: "700",
               fontSize: "0.82rem",
               cursor: "pointer",

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../lib/theme";
 import { AgentActivityModal, AgentTelemetryData } from "./AgentActivityModal";
 import { formatIndianCurrency } from "../../lib/formatters";
+import { apiFetch } from "../../lib/mockApi";
 
 interface AuditLog {
   id: string;
@@ -142,7 +143,7 @@ export const SecurityTelemetryView: React.FC<SecurityTelemetryProps> = ({
   const fetchSecurityData = async () => {
     try {
       // 1. Fetch live agents fleet
-      const agentsResp = await fetch(`${backendUrl}/api/v1/telemetry/agents`, {
+      const agentsResp = await apiFetch(`${backendUrl}/api/v1/telemetry/agents`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (agentsResp.ok) {
@@ -153,7 +154,7 @@ export const SecurityTelemetryView: React.FC<SecurityTelemetryProps> = ({
       }
 
       // 2. Fetch security audit logs
-      const logResp = await fetch(`${backendUrl}/api/v1/telemetry/audit-logs`, {
+      const logResp = await apiFetch(`${backendUrl}/api/v1/telemetry/audit-logs`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (logResp.ok) {
@@ -161,7 +162,7 @@ export const SecurityTelemetryView: React.FC<SecurityTelemetryProps> = ({
       }
 
       // 3. Fetch export requests
-      const expResp = await fetch(`${backendUrl}/api/v1/exports`, {
+      const expResp = await apiFetch(`${backendUrl}/api/v1/exports`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (expResp.ok) {
@@ -182,7 +183,7 @@ export const SecurityTelemetryView: React.FC<SecurityTelemetryProps> = ({
   const handleReviewExport = async (requestId: string, approved: boolean) => {
     setReviewLoading(true);
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/exports/review`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/exports/review`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -534,9 +535,9 @@ export const SecurityTelemetryView: React.FC<SecurityTelemetryProps> = ({
                       style={{
                         padding: "6px 14px",
                         borderRadius: "8px",
-                        border: `1px solid ${theme.border}`,
-                        backgroundColor: theme.textPrimary,
-                        color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                        border: `1px solid ${theme.goldBorder}`,
+                        backgroundColor: theme.primaryBtnBg,
+                        color: theme.primaryBtnText,
                         fontWeight: "700",
                         fontSize: "0.75rem",
                         cursor: "pointer",

@@ -3,6 +3,7 @@ import { ThemeColors } from "../../lib/theme";
 import { LoginRecord, CallLogRecord, MinuteActivityRecord, MockUser } from "../../lib/mockData";
 import { ExecutiveSecurityControl } from "../telemetry/ExecutiveSecurityControl";
 import { formatIndianCurrency } from "../../lib/formatters";
+import { apiFetch } from "../../lib/mockApi";
 
 interface OwnerCommandCenterProps {
   userRole: string;
@@ -29,7 +30,7 @@ export const OwnerCommandCenter: React.FC<OwnerCommandCenterProps> = ({
 
   const fetchForensics = async () => {
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/telemetry/owner-forensics`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/telemetry/owner-forensics`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (resp.ok) {

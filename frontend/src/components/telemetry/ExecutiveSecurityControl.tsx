@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../lib/theme";
 import { MockUser } from "../../lib/mockData";
+import { apiFetch } from "../../lib/mockApi";
 
 interface ExecutiveSecurityControlProps {
   theme: ThemeColors;
@@ -21,7 +22,7 @@ export const ExecutiveSecurityControl: React.FC<ExecutiveSecurityControlProps> =
 
   const fetchExecutives = async () => {
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/telemetry/owner-forensics`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/telemetry/owner-forensics`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (resp.ok) {
@@ -42,7 +43,7 @@ export const ExecutiveSecurityControl: React.FC<ExecutiveSecurityControlProps> =
 
   const handleExecutiveAction = async (employeeCode: string, action: string, value: any, agentName: string) => {
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/telemetry/executive-security`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/telemetry/executive-security`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -229,8 +230,8 @@ export const ExecutiveSecurityControl: React.FC<ExecutiveSecurityControlProps> =
                         padding: "5px 10px",
                         borderRadius: "6px",
                         border: `1px solid ${theme.border}`,
-                        backgroundColor: exec.account_locked ? theme.textPrimary : theme.cardBgElevated,
-                        color: exec.account_locked ? (theme.bg.includes("#090d16") ? "#000000" : "#ffffff") : theme.textPrimary,
+                        backgroundColor: exec.account_locked ? theme.primaryBtnBg : theme.cardBgElevated,
+                        color: exec.account_locked ? theme.primaryBtnText : theme.textPrimary,
                         fontSize: "0.72rem",
                         fontWeight: "700",
                         cursor: "pointer"

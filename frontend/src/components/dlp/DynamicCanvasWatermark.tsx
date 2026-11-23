@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ThemeMode } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface WatermarkProps {
   agentName: string;
@@ -49,11 +50,11 @@ export const DynamicCanvasWatermark: React.FC<WatermarkProps> = ({
       
       // Semi-transparent neutral font
       ctx.fillStyle = themeMode === "light" 
-        ? "rgba(51, 65, 85, 0.45)" 
-        : "rgba(255, 255, 255, 0.40)";
+        ? "rgba(6, 36, 27, 0.34)" 
+        : "rgba(212, 175, 106, 0.36)";
         
       ctx.fillText(watermarkText, -30, 90);
-      ctx.fillText(`CONFIDENTIAL • APEX SOVEREIGN REALTY DLP`, -30, 120);
+      ctx.fillText(`CONFIDENTIAL • ABSOLUTE ASSETS REAL ESTATE DLP`, -30, 120);
     }
 
     const patternUrl = canvas.toDataURL("image/png");
@@ -68,8 +69,8 @@ export const DynamicCanvasWatermark: React.FC<WatermarkProps> = ({
     overlayDiv.style.zIndex = "999990";
     overlayDiv.style.backgroundImage = `url(${patternUrl})`;
     overlayDiv.style.backgroundRepeat = "repeat";
-    // Exactly 20% visible as requested by the client
-    overlayDiv.style.opacity = "0.20";
+    // Subtle forensic watermark so screen remains effortless to read
+    overlayDiv.style.opacity = "0.06";
 
     containerRef.current.appendChild(overlayDiv);
   };
@@ -99,7 +100,7 @@ export const DynamicCanvasWatermark: React.FC<WatermarkProps> = ({
 
       if (tampered) {
         setTamperDetected(true);
-        fetch(`${backendUrl}/api/v1/telemetry/report-alert`, {
+        apiFetch(`${backendUrl}/api/v1/telemetry/report-alert`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -13,7 +13,9 @@ import {
   MinuteActivityRecord
 } from "./mockData";
 import { LeadItem } from "../components/leads/LeadTable";
-import { AgentTelemetryData } from "../components/telemetry/AgentActivityModal";
+import { dispositionToPipelineStatus, LeadDisposition } from "./leadAnalytics";
+
+const SEED_SCHEMA_VERSION = "aa_v3_simplified_channels";
 
 // In-memory state for demonstration
 class MockStore {
@@ -25,7 +27,7 @@ class MockStore {
   loginRecords: LoginRecord[] = [...MOCK_LOGIN_RECORDS];
   callLogs: CallLogRecord[] = [...MOCK_CALL_LOGS];
   activities: MinuteActivityRecord[] = [...MOCK_MINUTE_ACTIVITIES];
-  currentUser: MockUser = MOCK_USERS["owner@apexrealty.com"];
+  currentUser: MockUser = MOCK_USERS["owner@absoluteassets.in"];
   isStandalone: boolean = true;
   backendAvailable: boolean = false;
 
@@ -42,6 +44,13 @@ class MockStore {
   loadState() {
     try {
       if (typeof localStorage !== "undefined") {
+        const storedVersion = localStorage.getItem("aa_crm_seed_version");
+        if (storedVersion !== SEED_SCHEMA_VERSION) {
+          // Fresh migration to Absolute Assets v2 schema so stale localStorage doesn't hide new dispositions/properties
+          this.resetToDefaults();
+          return;
+        }
+
         const savedLeads = localStorage.getItem("apex_crm_mock_leads");
         if (savedLeads) {
           const parsed = JSON.parse(savedLeads);
@@ -69,8 +78,7 @@ class MockStore {
         const savedLogins = localStorage.getItem("apex_crm_mock_logins");
         if (savedLogins) {
           const parsed = JSON.parse(savedLogins);
-          this.loginRecords = (Array.isArray(parsed) && parsed.length > 0 ? parsed : [...MOCK_LOGIN_RECORDS])
-            .filter((r: any) => r.user_name !== "Sarah Jenkins" && r.user_name !== "Priya Sharma");
+          this.loginRecords = Array.isArray(parsed) && parsed.length > 0 ? parsed : [...MOCK_LOGIN_RECORDS];
         } else {
           this.loginRecords = [...MOCK_LOGIN_RECORDS];
         }
@@ -86,8 +94,7 @@ class MockStore {
         const savedActivities = localStorage.getItem("apex_crm_mock_activities");
         if (savedActivities) {
           const parsed = JSON.parse(savedActivities);
-          this.activities = (Array.isArray(parsed) && parsed.length > 0 ? parsed : [...MOCK_MINUTE_ACTIVITIES])
-            .filter((a: any) => a.agent_name !== "Sarah Jenkins" && a.agent_name !== "Priya Sharma");
+          this.activities = Array.isArray(parsed) && parsed.length > 0 ? parsed : [...MOCK_MINUTE_ACTIVITIES];
         } else {
           this.activities = [...MOCK_MINUTE_ACTIVITIES];
         }
@@ -95,11 +102,7 @@ class MockStore {
         const savedUsers = localStorage.getItem("apex_crm_mock_users");
         if (savedUsers) {
           const parsed = JSON.parse(savedUsers);
-          delete parsed["admin@apexrealty.com"];
-          delete parsed["manager@apexrealty.com"];
           this.users = { ...MOCK_USERS, ...parsed };
-          delete this.users["admin@apexrealty.com"];
-          delete this.users["manager@apexrealty.com"];
         } else {
           this.users = { ...MOCK_USERS };
         }
@@ -107,19 +110,14 @@ class MockStore {
         this.leads = getInitialMockLeads();
       }
     } catch (e) {
-      this.leads = getInitialMockLeads();
-      this.logs = [...MOCK_AUDIT_LOGS];
-      this.exportsList = [...MOCK_EXPORT_REQUESTS];
-      this.loginRecords = [...MOCK_LOGIN_RECORDS];
-      this.callLogs = [...MOCK_CALL_LOGS];
-      this.activities = [...MOCK_MINUTE_ACTIVITIES];
-      this.users = { ...MOCK_USERS };
+      this.resetToDefaults();
     }
   }
 
   saveState() {
     try {
       if (typeof localStorage !== "undefined") {
+        localStorage.setItem("aa_crm_seed_version", SEED_SCHEMA_VERSION);
         localStorage.setItem("apex_crm_mock_leads", JSON.stringify(this.leads));
         localStorage.setItem("apex_crm_mock_exports", JSON.stringify(this.exportsList));
         localStorage.setItem("apex_crm_mock_logs", JSON.stringify(this.logs));
@@ -140,6 +138,7 @@ class MockStore {
     this.callLogs = [...MOCK_CALL_LOGS];
     this.activities = [...MOCK_MINUTE_ACTIVITIES];
     this.users = { ...MOCK_USERS };
+    this.currentUser = this.users["owner@absoluteassets.in"];
     this.saveState();
   }
 }
@@ -154,53 +153,103 @@ function mockResponse(data: any, status = 200): Response {
   });
 }
 
-// Global fetch interceptor
-export function initMockInterceptor() {
-  const originalFetch = window.fetch;
+function resolveUserByEmail(email?: string): MockUser {
+  if (!email) return mockStore.users["owner@absoluteassets.in"];
+  if (mockStore.users[email]) return mockStore.users[email];
+  // Backward compatibility aliases
+  if (email.includes("rahul") || email.includes("dhruv")) return mockStore.users["dhruv@absoluteassets.in"];
+  if (email.includes("ananya")) return mockStore.users["ananya@absoluteassets.in"];
+  if (email.includes("vikram")) return mockStore.users["vikram@absoluteassets.in"];
+  if (email.includes("karan")) return mockStore.users["karan@absoluteassets.in"];
+  return mockStore.users["owner@absoluteassets.in"];
+}
 
-  // Initial check if backend is alive
-  fetch("http://localhost:8000/health", { signal: AbortSignal.timeout(1000) })
-    .then((res) => {
-      if (res.ok) {
-        mockStore.backendAvailable = true;
-        // If user hasn't explicitly set standalone, we can connect
-        console.log("[Apex CRM] Live backend detected at http://localhost:8000");
-      }
-    })
-    .catch(() => {
+let originalFetchRef: typeof fetch | null = null;
+let interceptorInstalled = false;
+
+function getNativeFetch(): typeof fetch | null {
+  if (originalFetchRef) return originalFetchRef;
+  if (typeof globalThis !== "undefined" && typeof globalThis.fetch === "function") {
+    return globalThis.fetch.bind(globalThis);
+  }
+  return null;
+}
+
+// Direct API fetch wrapper that works even in sandboxed iframes where window.fetch is a getter-only property
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const nativeFetch = getNativeFetch();
+
+  // Check if this is an API call
+  if (!url.includes("/api/v1/")) {
+    if (nativeFetch) {
+      return nativeFetch(input, init);
+    }
+    throw new Error(`Fetch unavailable for non-API request: ${url}`);
+  }
+
+  const forceStandalone =
+    (typeof localStorage !== "undefined" && localStorage.getItem("apex_crm_force_standalone") === "true") ||
+    !mockStore.backendAvailable;
+
+  if (!forceStandalone && nativeFetch) {
+    try {
+      const response = await nativeFetch(input, init);
+      return response;
+    } catch (networkError) {
       mockStore.backendAvailable = false;
-      mockStore.isStandalone = true;
-      console.log("[Apex CRM] Standalone Demo Mode Active (Running backend-free with rich dummy dataset)");
-    });
-
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-
-    // Check if this is an API call
-    if (!url.includes("/api/v1/")) {
-      return originalFetch(input, init);
     }
+  }
 
-    // If live backend is available and user didn't force standalone mode, try originalFetch first
-    const forceStandalone = (typeof localStorage !== "undefined" && localStorage.getItem("apex_crm_force_standalone") === "true") || !mockStore.backendAvailable;
+  // Simulate micro-delay for smooth UX
+  await new Promise((res) => setTimeout(res, 35));
 
-    if (!forceStandalone) {
-      try {
-        const response = await originalFetch(input, init);
-        return response;
-      } catch (networkError) {
-        // Backend disconnected or failed -> Fallback smoothly to mock engine!
-        console.warn("[Apex CRM] Backend unreachable, falling back to Standalone Mock Engine:", url);
-        mockStore.backendAvailable = false;
-      }
+  const method = (init?.method || "GET").toUpperCase();
+  const pathname = url.replace(/https?:\/\/[^\/]+/, "").split("?")[0];
+  const queryString = url.includes("?") ? url.split("?")[1] : "";
+  return handleMockApiRoute(pathname, method, init, queryString);
+}
+
+// Global fetch interceptor (safely handles getter-only or non-configurable window.fetch in iframes)
+export function initMockInterceptor() {
+  if (interceptorInstalled || typeof window === "undefined") return;
+  interceptorInstalled = true;
+
+  try {
+    if (typeof window.fetch === "function") {
+      originalFetchRef = window.fetch.bind(window);
     }
+  } catch {
+    originalFetchRef = null;
+  }
 
-    // Simulate micro-delay (30ms - 80ms) for realistic UX
-    await new Promise((res) => setTimeout(res, 40));
+  try {
+    const desc =
+      Object.getOwnPropertyDescriptor(window, "fetch") ||
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window), "fetch");
 
-    const method = (init?.method || "GET").toUpperCase();
-    const pathname = url.replace(/https?:\/\/[^\/]+/, "").split("?")[0];
-    const searchParams = new URL(url, "http://localhost:8000").searchParams;
+    if (!desc || (desc.writable && !desc.get)) {
+      window.fetch = apiFetch;
+    } else if (desc.configurable) {
+      Object.defineProperty(window, "fetch", {
+        value: apiFetch,
+        writable: true,
+        configurable: true
+      });
+    }
+    // If window.fetch is non-configurable getter-only, skip monkey-patching silently;
+    // all app API calls invoke apiFetch() directly.
+  } catch {
+    // Gracefully fall back to direct apiFetch() calls without throwing on boot.
+  }
+}
+
+async function handleMockApiRoute(
+  pathname: string,
+  method: string,
+  init?: RequestInit,
+  queryString = ""
+): Promise<Response> {
 
     // 1. Auth Login: POST /api/v1/auth/login
     if (pathname.endsWith("/auth/login") && method === "POST") {
@@ -209,17 +258,14 @@ export function initMockInterceptor() {
         body = init?.body ? JSON.parse(init.body as string) : {};
       } catch (e) {}
 
-      const email = body.email || "owner@apexrealty.com";
-      const user = mockStore.users[email] || mockStore.users["owner@apexrealty.com"];
+      const user = resolveUserByEmail(body.email);
       mockStore.currentUser = user;
 
-      // Extract client device & telemetry info
       const deviceModel = body.device_model || (body.device_type === "MOBILE_APP" ? "Apple iPhone 15 Pro (iOS 18.2)" : "MacBook Pro 16 M3 Max");
       const browser = body.browser || "Chrome 122.0.6";
       const channel: "WEB_APP" | "MOBILE_APP" = body.channel || (body.device_type === "MOBILE_APP" ? "MOBILE_APP" : "WEB_APP");
       const ipAddress = body.ip_address || "103.21.144.1";
 
-      // Check account lockout
       if (user.account_locked) {
         mockStore.loginRecords.unshift({
           id: `log-in-${Date.now()}`,
@@ -236,10 +282,9 @@ export function initMockInterceptor() {
           mfa_used: false
         });
         mockStore.saveState();
-        return mockResponse({ detail: "Account locked by administrator due to security violations. Please contact the Agency Owner." }, 403);
+        return mockResponse({ detail: "Account locked by administrator due to security violations. Please contact the Agency Principal." }, 403);
       }
 
-      // Check if MFA is required
       if (user.mfa_enabled || user.mfa_enforced) {
         return mockResponse({
           mfa_required: true,
@@ -255,7 +300,6 @@ export function initMockInterceptor() {
         });
       }
 
-      // Direct login without MFA
       user.login_count_today += 1;
       user.total_logins += 1;
       user.last_login_device = deviceModel;
@@ -298,16 +342,14 @@ export function initMockInterceptor() {
         body = init?.body ? JSON.parse(init.body as string) : {};
       } catch (e) {}
 
-      const email = body.email || "owner@apexrealty.com";
       const otpCode = body.otp_code || "";
-      const user = mockStore.users[email] || mockStore.users["owner@apexrealty.com"];
+      const user = resolveUserByEmail(body.email);
 
       const deviceModel = body.device_model || (body.channel === "MOBILE_APP" ? "Apple iPhone 15 Pro (iOS 18.2)" : "MacBook Pro 16 M3 Max");
       const browser = body.browser || "Chrome 122.0.6";
       const channel: "WEB_APP" | "MOBILE_APP" = body.channel || "WEB_APP";
       const ipAddress = body.ip_address || "103.21.144.1";
 
-      // Accept demo OTP "123456" or any 6-digit code
       const isValidOtp = otpCode === "123456" || (otpCode.length === 6 && /^\d+$/.test(otpCode));
 
       if (!isValidOtp) {
@@ -329,7 +371,6 @@ export function initMockInterceptor() {
         return mockResponse({ detail: "Invalid MFA verification token. Enter code 123456 for demo authorization." }, 401);
       }
 
-      // Successful MFA Verification
       user.login_count_today += 1;
       user.total_logins += 1;
       user.last_login_device = deviceModel;
@@ -384,16 +425,13 @@ export function initMockInterceptor() {
         body = init?.body ? JSON.parse(init.body as string) : {};
       } catch (e) {}
 
-      const email = body.email || mockStore.currentUser.email;
-      const user = mockStore.users[email] || mockStore.currentUser;
+      const user = body.email ? resolveUserByEmail(body.email) : mockStore.currentUser;
 
       if (user.mfa_enforced && !body.enabled) {
         return mockResponse({ detail: "MFA policy is enforced by company administration and cannot be disabled." }, 403);
       }
 
       user.mfa_enabled = !!body.enabled;
-      mockStore.saveState();
-
       mockStore.activities.unshift({
         id: `act-mfa-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -421,6 +459,16 @@ export function initMockInterceptor() {
         activities: mockStore.activities,
         executives: Object.values(mockStore.users)
       });
+    }
+
+    // 1d-2. Call Logs Summary Endpoint: GET /api/v1/telemetry/call-logs
+    if (pathname.endsWith("/telemetry/call-logs") && method === "GET") {
+      return mockResponse(mockStore.callLogs);
+    }
+
+    // 1d-3. Agent Activities Feed Endpoint: GET /api/v1/telemetry/activities
+    if (pathname.endsWith("/telemetry/activities") && method === "GET") {
+      return mockResponse(mockStore.activities);
     }
 
     // 1e. Executive Security Control: POST /api/v1/telemetry/executive-security
@@ -501,6 +549,70 @@ export function initMockInterceptor() {
       return mockResponse(mockStore.leads);
     }
 
+    // 3b. Create Lead Manually: POST /api/v1/leads
+    if (pathname.endsWith("/leads") && method === "POST") {
+      let body: any = {};
+      try {
+        body = init?.body ? JSON.parse(init.body as string) : {};
+      } catch {}
+
+      const now = Date.now();
+      const rawName = String(body.full_name || "").trim();
+      if (!rawName) {
+        return mockResponse({ detail: "Full name is required." }, 400);
+      }
+
+      const rawPhone = String(body.phone || "").replace(/\D/g, "");
+      const maskedPhone =
+        rawPhone.length >= 4
+          ? `+91 ${rawPhone.slice(0, 2)}*** **${rawPhone.slice(-2)}`
+          : `+91 98*** **${Math.floor(10 + Math.random() * 89)}`;
+
+      const assignedAgent = String(body.assigned_agent_name || "Dhruv Chaudhary").trim();
+      const source = String(body.source || "WEBSITE_DIRECT").trim();
+      const propertyType = String(body.property_type || "Residential Plots").trim();
+      const location = String(body.preferred_location || "Gurugram").trim();
+      const notes = String(body.notes || "Lead added manually in CRM.").trim();
+
+      const newLead: LeadItem = {
+        id: `lead-manual-${now}`,
+        lead_code: String(197500 + Math.floor(Math.random() * 499)),
+        full_name: rawName,
+        phone_masked: maskedPhone,
+        email_masked: body.email ? String(body.email) : undefined,
+        source,
+        status: "NEW",
+        disposition: "PENDING",
+        property_type: propertyType,
+        budget_min: 20000000,
+        budget_max: 45000000,
+        preferred_location: location,
+        notes,
+        assigned_agent_name: assignedAgent,
+        created_by_me: true,
+        sla_deadline: new Date(now + 15 * 60 * 1000).toISOString(),
+        is_sla_breached: false,
+        estimated_brokerage: 650000,
+        poaching_risk_score: "LOW",
+        offline_closing_flag: false,
+        created_at: new Date(now).toISOString()
+      };
+
+      mockStore.leads = [newLead, ...mockStore.leads];
+      mockStore.activities.unshift({
+        id: `act-add-${now}`,
+        timestamp: new Date(now).toISOString(),
+        agent_name: mockStore.currentUser.full_name,
+        employee_code: mockStore.currentUser.employee_code,
+        activity_type: "LEAD_VIEW",
+        title: `Added New Lead: ${rawName}`,
+        description: `Created inquiry for ${propertyType} and assigned to ${assignedAgent}.`,
+        severity: "INFO"
+      });
+      mockStore.saveState();
+      return mockResponse(newLead, 201);
+    }
+
     // 4. Click-to-Call: POST /api/v1/leads/:id/call
     const callMatch = pathname.match(/\/leads\/([^\/]+)\/call$/);
     if (callMatch && method === "POST") {
@@ -511,19 +623,22 @@ export function initMockInterceptor() {
       const mins = Math.floor(durationSec / 60);
       const secs = durationSec % 60;
 
+      let newCallRecord: CallLogRecord | null = null;
       if (lead) {
         if (lead.status === "NEW") {
           lead.status = "CONTACTED";
+          if (!lead.disposition || lead.disposition === "PENDING") {
+            lead.disposition = "FOLLOW_UP";
+          }
         }
 
-        // Add call log record
-        mockStore.callLogs.unshift({
+        newCallRecord = {
           id: `call-rec-${Date.now()}`,
           caller_name: lead.assigned_agent_name || mockStore.currentUser.full_name,
           caller_code: mockStore.currentUser.employee_code,
           lead_name: lead.full_name,
           lead_phone_masked: lead.phone_masked,
-          property_title: `${lead.property_type || "Apartment"} Inquiry`,
+          property_title: `${lead.property_type || "Gurugram Property"} Inquiry`,
           bridge_id: bridgeId,
           start_time: new Date().toISOString(),
           duration_seconds: durationSec,
@@ -531,9 +646,9 @@ export function initMockInterceptor() {
           outcome: "Masked Bridge Connected",
           notes: "Prospect consultation logged via encrypted telephony bridge.",
           is_encrypted: true
-        });
+        };
+        mockStore.callLogs.unshift(newCallRecord);
 
-        // Add minute activity
         mockStore.activities.unshift({
           id: `act-call-${Date.now()}`,
           timestamp: new Date().toISOString(),
@@ -553,73 +668,106 @@ export function initMockInterceptor() {
         call_bridge_id: bridgeId,
         status: "CONNECTED",
         lead_id: leadId,
+        call_log: newCallRecord,
         masked_number: lead?.phone_masked || "+91 98*** **22"
       });
     }
 
-    // 5. Simulate Meta Lead: POST /api/v1/webhooks/meta/simulate-test-lead
+    // 5. Simulate Ad Lead (Meta, WhatsApp, Instagram, LinkedIn, Google): POST /api/v1/webhooks/meta/simulate-test-lead
     if (pathname.includes("/webhooks/meta/simulate-test-lead") && method === "POST") {
       const now = Date.now();
-      const metaLeadgens = ["meta_ad_9841", "meta_reel_3320", "meta_story_5119", "meta_carousel_7740"];
+      const params = new URLSearchParams(queryString);
+      const requestedChannel = (params.get("channel") || "").toUpperCase();
+
+      const channelOptions = [
+        { key: "META", source: "META_FB_AD", label: "Meta (Facebook)" },
+        { key: "WHATSAPP", source: "WHATSAPP_AD", label: "WhatsApp" },
+        { key: "INSTAGRAM", source: "META_IG_REEL", label: "Instagram" },
+        { key: "LINKEDIN", source: "LINKEDIN_LEAD_GEN", label: "LinkedIn" },
+        { key: "GOOGLE", source: "GOOGLE_ADS_SEARCH", label: "Google Ads" }
+      ];
+      const chosenChannel =
+        channelOptions.find((c) => c.key === requestedChannel) ||
+        channelOptions[Math.floor(Math.random() * channelOptions.length)];
+
       const randomNames = [
         "Aarav Singhania",
         "Ishita Sengupta",
         "Rohan Kulkarni",
         "Divya Pillai",
-        "Kabir Roy",
+        "Kabir Malhotra",
         "Tanvi Joshi",
         "Alok Deshpande",
-        "Meenakshi Sundaram"
+        "Prashant Verma"
       ];
       const randomProperties = [
-        "4 BHK Sky Villa",
-        "3 BHK Luxury Apartment",
-        "5 BHK Independent Villa",
-        "4 BHK Duplex Penthouse",
-        "Grade-A Commercial Office"
+        "residential plots",
+        "DLF Privana South (4 BHK)",
+        "Elan The Mark (Commercial)",
+        "Smartworld One DXP (Penthouse)",
+        "M3M Paragon 57 (Pre-Leased)"
       ];
       const randomLocations = [
-        "Downtown Skyline",
-        "Palm Grove Estates",
-        "Marina Bay Promenade",
-        "Central Business District (CBD)"
+        "Sector 106, Dwarka Expressway",
+        "Sector 77, Gurugram",
+        "Sector 57, Golf Course Road",
+        "Sohna Road & New Gurugram"
       ];
-      const randomAgents = ["Rahul Verma", "Ananya Patel", "Vikram Malhotra", "Karan Mehta"];
+      const randomAgents = [
+        { name: "Dhruv Chaudhary", code: "EXE-204" },
+        { name: "Ananya Patel", code: "EXE-208" },
+        { name: "Vikram Malhotra", code: "EXE-215" },
+        { name: "Karan Mehta", code: "EXE-210" }
+      ];
 
       const chosenName = randomNames[Math.floor(Math.random() * randomNames.length)];
       const chosenProp = randomProperties[Math.floor(Math.random() * randomProperties.length)];
       const chosenLoc = randomLocations[Math.floor(Math.random() * randomLocations.length)];
       const chosenAgent = randomAgents[Math.floor(Math.random() * randomAgents.length)];
-      const chosenSource = Math.random() > 0.5 ? "META_FB_AD" : "META_IG_REEL";
+      const leadCode = String(197300 + Math.floor(Math.random() * 699));
 
       const newLead: LeadItem = {
         id: `lead-sim-${Date.now()}`,
+        lead_code: leadCode,
         full_name: chosenName,
         phone_masked: `+91 98*** **${Math.floor(10 + Math.random() * 89)}`,
-        email_masked: `${chosenName.toLowerCase().replace(" ", ".")}@example.com`,
-        source: chosenSource,
+        email_masked: `${chosenName.toLowerCase().replace(" ", ".")}@gmail.com`,
+        source: chosenChannel.source,
         status: "NEW",
+        disposition: "PENDING",
         property_type: chosenProp,
-        budget_min: 45000000,
-        budget_max: 65000000,
+        budget_min: 25000000,
+        budget_max: 52000000,
         preferred_location: chosenLoc,
-        notes: `⚡ Real-time lead ingested via ${chosenSource === "META_FB_AD" ? "Facebook Lead Ad" : "Instagram Reel"} Webhook. 15-minute SLA countdown activated!`,
-        assigned_agent_name: chosenAgent,
+        notes: `New inquiry received from ${chosenChannel.label} advertisement. Assigned to ${chosenAgent.name} with 15-minute response timer.`,
+        assigned_agent_name: chosenAgent.name,
+        created_by_me: false,
         sla_deadline: new Date(now + 15 * 60 * 1000).toISOString(),
         is_sla_breached: false,
-        estimated_brokerage: Math.round(55000000 * 0.02),
+        estimated_brokerage: Math.round(38000000 * 0.02),
         poaching_risk_score: "LOW",
-        poaching_risk_reason: "Fresh incoming inquiry via Meta Lead Webhook.",
+        poaching_risk_reason: `Fresh inquiry from ${chosenChannel.label}.`,
         offline_closing_flag: false,
         created_at: new Date(now).toISOString()
       };
 
       mockStore.leads = [newLead, ...mockStore.leads];
+      mockStore.activities.unshift({
+        id: `act-lead-${Date.now()}`,
+        timestamp: new Date(now).toISOString(),
+        agent_name: chosenAgent.name,
+        employee_code: chosenAgent.code,
+        activity_type: "LEAD_VIEW",
+        title: `New ${chosenChannel.label} Ad Lead Assigned`,
+        description: `${chosenName} inquired about ${chosenProp} via ${chosenChannel.label}. Auto-assigned to ${chosenAgent.name}.`,
+        severity: "INFO"
+      });
       mockStore.saveState();
 
       return mockResponse({
         success: true,
-        message: "Meta Lead Ingested via Webhook! Auto-assigned to ready executive.",
+        channel: chosenChannel.label,
+        message: `${chosenChannel.label} lead received and assigned to ${chosenAgent.name}.`,
         lead: newLead
       });
     }
@@ -651,8 +799,34 @@ export function initMockInterceptor() {
 
       const lead = mockStore.leads.find((l) => l.id === leadId);
       if (lead) {
+        const previousAgent = lead.assigned_agent_name;
+        if (body.disposition) {
+          lead.disposition = body.disposition as LeadDisposition;
+          if (!body.status) {
+            lead.status = dispositionToPipelineStatus(lead.disposition);
+          }
+        }
         if (body.status) lead.status = body.status;
-        if (body.notes) lead.notes = body.notes;
+        if (typeof body.notes === "string") lead.notes = body.notes;
+        if (typeof body.assigned_agent_name === "string" && body.assigned_agent_name.trim()) {
+          lead.assigned_agent_name = body.assigned_agent_name.trim();
+        }
+
+        const agentChanged = previousAgent && lead.assigned_agent_name !== previousAgent;
+        mockStore.activities.unshift({
+          id: `act-upd-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          agent_name: lead.assigned_agent_name || mockStore.currentUser.full_name,
+          employee_code: mockStore.currentUser.employee_code,
+          activity_type: "DEAL_UPDATE",
+          title: agentChanged
+            ? `Reassigned Lead: ${lead.full_name}`
+            : `Updated Lead: ${lead.full_name}`,
+          description: agentChanged
+            ? `Moved lead from ${previousAgent} to ${lead.assigned_agent_name}.`
+            : `Changed status to ${(lead.disposition || lead.status).replace(/_/g, " ")}.${typeof body.notes === "string" && body.notes.trim() ? ` Note: "${body.notes.trim().slice(0, 90)}"` : ""}`,
+          severity: "INFO"
+        });
         mockStore.saveState();
         return mockResponse(lead);
       }
@@ -678,7 +852,7 @@ export function initMockInterceptor() {
           id: `act-2-${leadId}`,
           activity_type: "SLA_COUNTDOWN_STARTED",
           metadata_json: JSON.stringify({
-            assigned_agent: lead?.assigned_agent_name || "Rahul Verma",
+            assigned_agent: lead?.assigned_agent_name || "Dhruv Chaudhary",
             status: lead?.is_sla_breached ? "BREACHED" : "ACTIVE"
           }),
           created_at: lead?.created_at || new Date().toISOString()
@@ -688,7 +862,7 @@ export function initMockInterceptor() {
           activity_type: "WATERMARKED_VIEW",
           metadata_json: JSON.stringify({
             viewer: mockStore.currentUser.full_name,
-            dlp_protection: "Canvas Watermark Injected"
+            dlp_protection: "Absolute Assets Canvas Watermark Injected"
           }),
           created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString()
         }
@@ -700,6 +874,7 @@ export function initMockInterceptor() {
           activity_type: "STAGE_CHANGED",
           metadata_json: JSON.stringify({
             new_stage: lead?.status,
+            disposition: lead?.disposition,
             notes: lead?.notes
           }),
           created_at: new Date(Date.now() - 1000 * 60 * 2).toISOString()
@@ -711,98 +886,97 @@ export function initMockInterceptor() {
 
     // 9. Telemetry Agents: GET /api/v1/telemetry/agents
     if (pathname.endsWith("/telemetry/agents") && method === "GET") {
-      // Return agents reflecting live lead counts from mockStore
       const agents = [
         {
-          id: "ag-rahul",
-          full_name: "Rahul Verma",
-          email: "agent.rahul@apexrealty.com",
+          id: "ag-dhruv",
+          full_name: "Dhruv Chaudhary",
+          email: "dhruv@absoluteassets.in",
           employee_code: "EXE-204",
           role: "AGENT",
           phone: "+919822200000",
-          assigned_territory: "Downtown Skyline",
+          assigned_territory: "Dwarka Expressway & Residential Plots",
           is_punched_in: true,
-          last_punch_time: "2026-10-27T09:30:00Z",
+          last_punch_time: "2026-09-16T09:30:00Z",
           working_hours_today: "6h 45m",
-          active_leads_count: mockStore.leads.filter((l) => l.assigned_agent_name === "Rahul Verma").length,
-          total_brokerage_managed: 2450000,
+          active_leads_count: mockStore.leads.filter((l) => l.assigned_agent_name === "Dhruv Chaudhary").length,
+          total_brokerage_managed: 4580000,
           device_type: "LAPTOP",
           device_model: "Dell XPS 15 (Windows 11)",
           ip_address: "103.21.144.10",
-          current_location: "Downtown Skyline HQ (19.076, 72.877)",
-          latitude: 19.076,
-          longitude: 72.8777,
+          current_location: "Sector 106 Dwarka Exp. Desk (28.501, 77.011)",
+          latitude: 28.501,
+          longitude: 77.011,
           poaching_risk_score: "HIGH",
-          poaching_risk_reason: "Customer contact viewed 6 times without using CRM bridge. Suspected direct personal calling.",
+          poaching_risk_reason: "Customer contact viewed 5+ times without completing CRM bridge talk-time.",
           offline_closing_flag: false
         },
         {
           id: "ag-ananya",
           full_name: "Ananya Patel",
-          email: "agent.ananya@apexrealty.com",
+          email: "ananya@absoluteassets.in",
           employee_code: "EXE-208",
           role: "AGENT",
           phone: "+919833344455",
-          assigned_territory: "Palm Grove Estates",
+          assigned_territory: "Golf Course Extension & SPR",
           is_punched_in: true,
-          last_punch_time: "2026-10-27T10:00:00Z",
+          last_punch_time: "2026-09-16T10:00:00Z",
           working_hours_today: "6h 15m",
           active_leads_count: mockStore.leads.filter((l) => l.assigned_agent_name === "Ananya Patel").length,
-          total_brokerage_managed: 4550000,
+          total_brokerage_managed: 4590000,
           device_type: "MOBILE_PHONE",
           device_model: "Apple iPhone 15 Pro",
           ip_address: "157.34.192.44",
-          current_location: "Palm Grove Villa 12 Inspection (19.113, 72.869)",
-          latitude: 19.1136,
-          longitude: 72.8697,
+          current_location: "DLF Privana South Site Office, Sec 77 (28.393, 76.988)",
+          latitude: 28.393,
+          longitude: 76.988,
           poaching_risk_score: "CRITICAL",
-          poaching_risk_reason: "Marked 'LOST' in CRM for Kavita Chawla (₹7.25 Cr), but GPS logs prove 3 unlogged physical visits! Offline closing risk of ₹14.5 Lakhs brokerage.",
+          poaching_risk_reason: "Marked 'Not Interested' for Kavita Chawla (₹6.25 Cr), but GPS logs prove 3 unlogged site visits! Offline closing risk of ₹14.5 Lakhs.",
           offline_closing_flag: true
         },
         {
           id: "ag-vikram",
           full_name: "Vikram Malhotra",
-          email: "agent.vikram@apexrealty.com",
+          email: "vikram@absoluteassets.in",
           employee_code: "EXE-215",
           role: "AGENT",
           phone: "+919844455566",
-          assigned_territory: "Marina Bay Promenade",
+          assigned_territory: "Sector 57 & Commercial Retail",
           is_punched_in: true,
-          last_punch_time: "2026-10-27T09:45:00Z",
+          last_punch_time: "2026-09-16T09:45:00Z",
           working_hours_today: "6h 30m",
           active_leads_count: mockStore.leads.filter((l) => l.assigned_agent_name === "Vikram Malhotra").length,
-          total_brokerage_managed: 2400000,
+          total_brokerage_managed: 1650000,
           device_type: "MOBILE_PHONE",
           device_model: "Samsung Galaxy S24 Ultra",
           ip_address: "157.34.192.89",
-          current_location: "Marina Azure Site Office (18.922, 72.834)",
-          latitude: 18.922,
-          longitude: 72.8347,
+          current_location: "M3M Paragon 57 Lounge, Sec 57 (28.421, 77.071)",
+          latitude: 28.421,
+          longitude: 77.071,
           poaching_risk_score: "LOW",
-          poaching_risk_reason: "Fully compliant CRM bridge calls logged (22 mins talk time).",
+          poaching_risk_reason: "Fully compliant CRM bridge calls logged (24 mins talk time).",
           offline_closing_flag: false
         },
         {
           id: "ag-karan",
           full_name: "Karan Mehta",
-          email: "agent.karan@apexrealty.com",
+          email: "karan@absoluteassets.in",
           employee_code: "EXE-210",
           role: "AGENT",
           phone: "+919822277889",
-          assigned_territory: "Bandra West & Worli Promenade",
+          assigned_territory: "DLF Privana & Sohna Road",
           is_punched_in: true,
-          last_punch_time: "2026-10-27T09:15:00Z",
+          last_punch_time: "2026-09-16T09:15:00Z",
           working_hours_today: "7h 00m",
           active_leads_count: mockStore.leads.filter((l) => l.assigned_agent_name === "Karan Mehta").length,
-          total_brokerage_managed: 3100000,
+          total_brokerage_managed: 3420000,
           device_type: "LAPTOP",
           device_model: "MacBook Pro 14 M3",
           ip_address: "103.21.144.55",
-          current_location: "Bandra Sea Face Office (19.054, 72.826)",
-          latitude: 19.0544,
-          longitude: 72.8266,
+          current_location: "Absolute Assets HQ, Golf Course Road (28.459, 77.093)",
+          latitude: 28.459,
+          longitude: 77.093,
           poaching_risk_score: "LOW",
-          poaching_risk_reason: "Ultra-luxury client consultation completed with 100% CRM masked bridge compliance.",
+          poaching_risk_reason: "Ultra-luxury client consultations completed with 100% masked bridge compliance.",
           offline_closing_flag: false
         }
       ];
@@ -871,6 +1045,17 @@ export function initMockInterceptor() {
 
       const isPunchedIn = body.action === "PUNCH_IN";
       mockStore.currentUser.is_punched_in = isPunchedIn;
+      mockStore.activities.unshift({
+        id: `act-punch-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        agent_name: mockStore.currentUser.full_name,
+        employee_code: mockStore.currentUser.employee_code,
+        activity_type: "GPS_CHECKIN",
+        title: isPunchedIn ? "Punched In for Shift" : "Punched Out of Shift",
+        description: `${mockStore.currentUser.full_name} ${isPunchedIn ? "started" : "ended"} duty with GPS verification.`,
+        severity: "INFO"
+      });
+      mockStore.saveState();
 
       return mockResponse({
         is_punched_in: isPunchedIn,
@@ -884,10 +1069,10 @@ export function initMockInterceptor() {
     const confiscateAllMatch = pathname.match(/\/telemetry\/agents\/([^\/]+)\/confiscate-all$/);
     if (confiscateAllMatch && method === "POST") {
       const agentId = confiscateAllMatch[1];
-      // Target agent mapping
       let agentName = "Ananya Patel";
-      if (agentId.includes("rahul")) agentName = "Rahul Verma";
+      if (agentId.includes("dhruv") || agentId.includes("rahul")) agentName = "Dhruv Chaudhary";
       else if (agentId.includes("vikram")) agentName = "Vikram Malhotra";
+      else if (agentId.includes("karan")) agentName = "Karan Mehta";
 
       let count = 0;
       mockStore.leads = mockStore.leads.map((lead) => {
@@ -913,12 +1098,10 @@ export function initMockInterceptor() {
       });
     }
 
-    // 16. Telemetry Alerts & Devices: POST /api/v1/telemetry/report-alert, POST /api/v1/telemetry/device
+    // 16. Telemetry Alerts & Devices
     if (pathname.includes("/telemetry/report-alert") || pathname.includes("/telemetry/device")) {
       return mockResponse({ success: true, recorded_at: new Date().toISOString() });
     }
 
-    // Fallback: Generic 200 OK for any unhandled /api/v1 endpoint
     return mockResponse({ message: "Mock API Standalone Success", endpoint: pathname });
-  };
 }

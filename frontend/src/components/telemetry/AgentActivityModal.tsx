@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../lib/theme";
 import { formatIndianCurrency } from "../../lib/formatters";
+import { apiFetch } from "../../lib/mockApi";
 
 export interface AgentTelemetryData {
   id: string;
@@ -75,7 +76,7 @@ export const AgentActivityModal: React.FC<AgentActivityModalProps> = ({
     if (!agent || !token) return;
     const fetchLive = async () => {
       try {
-        const resp = await fetch(`${backendUrl}/api/v1/telemetry/agents/${agent.id}/activities`, {
+        const resp = await apiFetch(`${backendUrl}/api/v1/telemetry/agents/${agent.id}/activities`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (resp.ok) {
@@ -351,7 +352,7 @@ export const AgentActivityModal: React.FC<AgentActivityModalProps> = ({
   const handleConfiscateClick = async () => {
     try {
       if (token && agent.id) {
-        await fetch(`${backendUrl}/api/v1/telemetry/agents/${agent.id}/confiscate-all`, {
+        await apiFetch(`${backendUrl}/api/v1/telemetry/agents/${agent.id}/confiscate-all`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -574,8 +575,8 @@ export const AgentActivityModal: React.FC<AgentActivityModalProps> = ({
                       width: "26px",
                       height: "26px",
                       borderRadius: "50%",
-                      backgroundColor: theme.textPrimary,
-                      color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                      backgroundColor: theme.primaryBtnBg,
+                      color: theme.primaryBtnText,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -805,9 +806,9 @@ export const AgentActivityModal: React.FC<AgentActivityModalProps> = ({
                       style={{
                         padding: "8px 18px",
                         borderRadius: "8px",
-                        border: `1px solid ${theme.border}`,
-                        backgroundColor: theme.textPrimary,
-                        color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                        border: `1px solid ${theme.goldBorder}`,
+                        backgroundColor: theme.primaryBtnBg,
+                        color: theme.primaryBtnText,
                         fontWeight: "700",
                         fontSize: "0.82rem",
                         cursor: "pointer",
@@ -864,7 +865,7 @@ export const AgentActivityModal: React.FC<AgentActivityModalProps> = ({
           backgroundColor: theme.cardBgSecondary
         }}>
           <div style={{ fontSize: "0.75rem", color: theme.textMuted }}>
-            Apex Sovereign Real Estate CRM Telemetry Engine
+            Absolute Assets Real Estate CRM Telemetry Engine
           </div>
 
           <button

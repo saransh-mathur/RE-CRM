@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface AntiScreenCaptureGuardProps {
   children: React.ReactNode;
@@ -27,7 +28,7 @@ export const AntiScreenCaptureGuard: React.FC<AntiScreenCaptureGuardProps> = ({
     setBlackoutActive(true);
 
     // Dispatch incident to Owner Activity Radar
-    fetch(`${backendUrl}/api/v1/telemetry/log-activity`, {
+    apiFetch(`${backendUrl}/api/v1/telemetry/log-activity`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,0 +1,14 @@
+{
+  "name": "apex-sovereign-crm",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=crm-advanced-frontend",
+    "build": "npm run build --workspace=crm-advanced-frontend",
+    "preview": "npm run preview --workspace=crm-advanced-frontend",
+    "lint": "npm run lint --workspace=crm-advanced-frontend"
+  }
+}

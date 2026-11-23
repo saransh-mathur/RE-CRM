@@ -1,8 +1,13 @@
 import React, { useState } from "react";
 import { LeadTable, LeadItem } from "../leads/LeadTable";
-import { LeadDetailModal } from "../leads/LeadDetailModal";
+import { LeadPreviewDrawer } from "../leads/LeadPreviewDrawer";
 import { PropertyList, PropertyItem } from "../properties/PropertyList";
-import { ThemeColors } from "../../lib/theme";
+import { LeadAnalyticsPanel } from "../analytics/LeadAnalyticsPanel";
+import { SettingsView } from "../settings/SettingsView";
+import { AppSection } from "../layout/Sidebar";
+import { ThemeColors, ThemeMode } from "../../lib/theme";
+import { CallLogRecord, MinuteActivityRecord } from "../../lib/mockData";
+import { AdChannel, LeadDisposition, LeadSummaryFilterKey } from "../../lib/leadAnalytics";
 
 interface ExecutiveDashboardProps {
   user: {
@@ -14,10 +19,25 @@ interface ExecutiveDashboardProps {
   };
   leads: LeadItem[];
   properties: PropertyItem[];
+  callLogs: CallLogRecord[];
+  activities: MinuteActivityRecord[];
+  activeSection: AppSection;
+  onSelectSection: (section: AppSection) => void;
   token: string;
   theme: ThemeColors;
+  themeMode: ThemeMode;
+  onToggleTheme: () => void;
+  onPersonaChange: (email: string, password: string) => void;
+  onPunchStatusChange: (punched: boolean) => void;
+  onRequestExport: () => void;
+  onOpenProfile: () => void;
+  onResetDemoData: () => void;
+  onLogout: () => void;
   onCallLead: (lead: LeadItem) => void;
-  onUpdateLeadStatus: (leadId: string, status: string, notes: string) => Promise<void>;
+  onUpdateLead: (
+    leadId: string,
+    payload: { status?: string; notes?: string; disposition?: LeadDisposition; assigned_agent_name?: string }
+  ) => Promise<void>;
   backendUrl?: string;
 }
 
@@ -25,195 +45,156 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   user,
   leads,
   properties,
+  callLogs,
+  activities,
+  activeSection,
+  onSelectSection,
   token,
   theme,
+  themeMode,
+  onToggleTheme,
+  onPersonaChange,
+  onPunchStatusChange,
+  onRequestExport,
+  onOpenProfile,
+  onResetDemoData,
+  onLogout,
   onCallLead,
-  onUpdateLeadStatus,
+  onUpdateLead,
   backendUrl = "http://localhost:8000"
 }) => {
-  const [activeTab, setActiveTab] = useState<"leads" | "properties">("leads");
-  const [selectedLead, setSelectedLead] = useState<LeadItem | null>(null);
+  const [drillDisposition, setDrillDisposition] = useState<LeadDisposition | "ALL">("ALL");
+  const [drillSummary, setDrillSummary] = useState<LeadSummaryFilterKey | null>(null);
+  const [drillChannel, setDrillChannel] = useState<AdChannel | "ALL">("ALL");
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
-  // Filter: Executives ONLY see leads assigned to them!
+  const firstName = user.fullName.toLowerCase().split(" ")[0];
+  const displayFirstName = user.fullName.split(" ")[0];
+
   const myLeads = leads.filter(
-    (l) => !l.assigned_agent_name || l.assigned_agent_name.toLowerCase().includes(user.fullName.toLowerCase().split(" ")[0])
+    (l) => !l.assigned_agent_name || l.assigned_agent_name.toLowerCase().includes(firstName)
+  );
+  const selectedLead = selectedLeadId ? myLeads.find((l) => l.id === selectedLeadId) || null : null;
+
+  const myCalls = callLogs.filter(
+    (c) => c.caller_code === user.employeeCode || c.caller_name.toLowerCase().includes(firstName)
   );
 
-  const newInquiries = myLeads.filter((l) => l.status === "NEW").length;
-  const inNegotiation = myLeads.filter((l) => l.status === "NEGOTIATION").length;
-  const wonDeals = myLeads.filter((l) => l.status === "WON").length;
+  const myActivities = activities.filter(
+    (a) => a.employee_code === user.employeeCode || a.agent_name.toLowerCase().includes(firstName)
+  );
+
+  const handleDrillDownDisposition = (disposition: LeadDisposition) => {
+    setDrillSummary(null);
+    setDrillChannel("ALL");
+    setDrillDisposition(disposition);
+    onSelectSection("leads");
+  };
+
+  const handleDrillDownSummary = (summaryKey: LeadSummaryFilterKey) => {
+    setDrillDisposition("ALL");
+    setDrillChannel("ALL");
+    setDrillSummary(summaryKey === "ALL" ? null : summaryKey);
+    onSelectSection("leads");
+  };
+
+  const handleDrillDownChannel = (channel: AdChannel) => {
+    setDrillDisposition("ALL");
+    setDrillSummary(null);
+    setDrillChannel(channel);
+    onSelectSection("leads");
+  };
+
+  const handleOpenMyLeadsClean = () => {
+    setDrillDisposition("ALL");
+    setDrillSummary(null);
+    setDrillChannel("ALL");
+    onSelectSection("leads");
+  };
+
+  const viewSection =
+    activeSection === "leads" || activeSection === "properties" || activeSection === "settings"
+      ? activeSection
+      : "overview";
 
   return (
-    <div>
-      {/* Executive Quick Stats (Crystal Glass Style) */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-        gap: "16px",
-        marginBottom: "24px"
-      }}>
-        {/* Metric 1 */}
-        <div style={{
-          backgroundColor: theme.cardBg,
-          backdropFilter: theme.glassBackdrop,
-          WebkitBackdropFilter: theme.glassBackdrop,
-          border: theme.glassBorder,
-          boxShadow: theme.glassShadow,
-          padding: "20px 22px",
-          borderRadius: "18px"
-        }}>
-          <div style={{ fontSize: "0.72rem", color: theme.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-            My Active Leads
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {viewSection === "overview" && (
+        <div style={{ paddingBottom: "14px", borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ fontSize: "0.8rem", color: theme.textMuted }}>
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
           </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: "800", color: theme.textPrimary, marginTop: "6px", letterSpacing: "-0.02em" }}>
-            {myLeads.length}
-          </div>
-          <div style={{ fontSize: "0.74rem", color: theme.textMuted, marginTop: "4px" }}>
-            Directly assigned to {user.fullName}
-          </div>
+          <h2 style={{ fontSize: "1.45rem", fontWeight: 700, color: theme.textPrimary, margin: "2px 0 0 0" }}>
+            Hello, {displayFirstName}
+          </h2>
         </div>
+      )}
 
-        {/* Metric 2 */}
-        <div style={{
-          backgroundColor: theme.cardBg,
-          backdropFilter: theme.glassBackdrop,
-          WebkitBackdropFilter: theme.glassBackdrop,
-          border: theme.glassBorder,
-          boxShadow: theme.glassShadow,
-          padding: "20px 22px",
-          borderRadius: "18px"
-        }}>
-          <div style={{ fontSize: "0.72rem", color: theme.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-            Pending First Contact (SLA)
-          </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: "800", color: theme.textPrimary, marginTop: "6px", letterSpacing: "-0.02em" }}>
-            {newInquiries}
-          </div>
-          <div style={{ fontSize: "0.74rem", color: theme.textMuted, marginTop: "4px" }}>
-            15-minute response target
-          </div>
-        </div>
+      {viewSection === "overview" && (
+        <LeadAnalyticsPanel
+          leads={myLeads}
+          callLogs={myCalls}
+          activities={myActivities}
+          currentUserName={user.fullName}
+          theme={theme}
+          onSelectDisposition={handleDrillDownDisposition}
+          onSelectSummaryCard={handleDrillDownSummary}
+          onSelectChannel={handleDrillDownChannel}
+          onOpenAllLeads={handleOpenMyLeadsClean}
+        />
+      )}
 
-        {/* Metric 3 */}
-        <div style={{
-          backgroundColor: theme.cardBg,
-          backdropFilter: theme.glassBackdrop,
-          WebkitBackdropFilter: theme.glassBackdrop,
-          border: theme.glassBorder,
-          boxShadow: theme.glassShadow,
-          padding: "20px 22px",
-          borderRadius: "18px"
-        }}>
-          <div style={{ fontSize: "0.72rem", color: theme.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-            Deals in Negotiation
-          </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: "800", color: theme.textPrimary, marginTop: "6px", letterSpacing: "-0.02em" }}>
-            {inNegotiation}
-          </div>
-          <div style={{ fontSize: "0.74rem", color: theme.textMuted, marginTop: "4px" }}>
-            Active buyer negotiations
-          </div>
-        </div>
-
-        {/* Metric 4 */}
-        <div style={{
-          backgroundColor: theme.cardBg,
-          backdropFilter: theme.glassBackdrop,
-          WebkitBackdropFilter: theme.glassBackdrop,
-          border: theme.glassBorder,
-          boxShadow: theme.glassShadow,
-          padding: "20px 22px",
-          borderRadius: "18px"
-        }}>
-          <div style={{ fontSize: "0.72rem", color: theme.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-            Closed Won Deals
-          </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: "800", color: theme.textPrimary, marginTop: "6px", letterSpacing: "-0.02em" }}>
-            {wonDeals}
-          </div>
-          <div style={{ fontSize: "0.74rem", color: theme.textMuted, marginTop: "4px" }}>
-            Deeds registered & commissioned
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs (Frosted Crystal Glass Segmented Control) */}
-      <div style={{
-        display: "flex",
-        gap: "8px",
-        marginBottom: "20px",
-        backgroundColor: theme.cardBgSecondary,
-        padding: "6px",
-        borderRadius: "14px",
-        border: `1px solid ${theme.border}`,
-        width: "fit-content"
-      }}>
-        <button
-          onClick={() => setActiveTab("leads")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "10px",
-            border: activeTab === "leads" ? `1px solid ${theme.border}` : "1px solid transparent",
-            backgroundColor: activeTab === "leads" ? theme.cardBgElevated : "transparent",
-            color: theme.textPrimary,
-            fontWeight: activeTab === "leads" ? "800" : "600",
-            fontSize: "0.82rem",
-            cursor: "pointer",
-            boxShadow: activeTab === "leads" ? theme.glassShadow : "none",
-            transition: "all 0.15s ease"
-          }}
-        >
-          📋 My Assigned Leads ({myLeads.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab("properties")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "10px",
-            border: activeTab === "properties" ? `1px solid ${theme.border}` : "1px solid transparent",
-            backgroundColor: activeTab === "properties" ? theme.cardBgElevated : "transparent",
-            color: theme.textPrimary,
-            fontWeight: activeTab === "properties" ? "800" : "600",
-            fontSize: "0.82rem",
-            cursor: "pointer",
-            boxShadow: activeTab === "properties" ? theme.glassShadow : "none",
-            transition: "all 0.15s ease"
-          }}
-        >
-          🏢 Properties Catalog ({properties.length})
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === "leads" && (
+      {viewSection === "leads" && (
         <LeadTable
           leads={myLeads}
+          callLogs={myCalls}
           theme={theme}
-          onSelectLead={(l) => setSelectedLead(l)}
+          onSelectLead={(l) => setSelectedLeadId(l.id)}
           onCallLead={onCallLead}
           token={token}
+          currentUserName={user.fullName}
+          initialDispositionFilter={drillDisposition}
+          initialSummaryFilter={drillSummary}
+          initialChannelFilter={drillChannel}
+          onClearExternalFilters={() => {
+            setDrillDisposition("ALL");
+            setDrillSummary(null);
+            setDrillChannel("ALL");
+          }}
+          defaultViewMode="table"
         />
       )}
 
-      {activeTab === "properties" && (
-        <PropertyList
-          properties={properties}
+      {viewSection === "properties" && (
+        <PropertyList properties={properties} theme={theme} />
+      )}
+
+      {viewSection === "settings" && (
+        <SettingsView
+          user={user}
+          token={token}
           theme={theme}
+          themeMode={themeMode}
+          onToggleTheme={onToggleTheme}
+          onPersonaChange={onPersonaChange}
+          onPunchStatusChange={onPunchStatusChange}
+          onRequestExport={onRequestExport}
+          onOpenProfile={onOpenProfile}
+          onResetDemoData={onResetDemoData}
+          onLogout={onLogout}
+          backendUrl={backendUrl}
         />
       )}
 
-      {/* Lead Detail Modal */}
-      <LeadDetailModal
+      <LeadPreviewDrawer
         lead={selectedLead}
         theme={theme}
-        onClose={() => setSelectedLead(null)}
-        onUpdateLeadStatus={onUpdateLeadStatus}
+        onClose={() => setSelectedLeadId(null)}
+        onUpdateLead={onUpdateLead}
+        onCallLead={onCallLead}
+        callLogs={myCalls}
         token={token}
         backendUrl={backendUrl}
-        onCallLead={onCallLead}
-        allLeads={myLeads}
-        onNavigateLead={(l) => setSelectedLead(l)}
       />
     </div>
   );

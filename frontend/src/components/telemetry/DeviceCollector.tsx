@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface DeviceCollectorProps {
   token: string;
@@ -68,7 +69,7 @@ export const DeviceCollector: React.FC<DeviceCollectorProps> = ({
       if (onDeviceClassified) onDeviceClassified(classifiedType);
 
       try {
-        await fetch(`${backendUrl}/api/v1/telemetry/device`, {
+        await apiFetch(`${backendUrl}/api/v1/telemetry/device`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface LoginPageProps {
   theme: ThemeColors;
@@ -17,9 +18,9 @@ interface LoginPageProps {
 
 const PRESET_USERS = [
   {
-    label: "👑 Vikramaditya (Agency Owner)",
+    label: "👑 Vikramaditya (Agency Principal)",
     role: "OWNER",
-    email: "owner@apexrealty.com",
+    email: "owner@absoluteassets.in",
     pass: "OwnerPass2026!",
     device: "MacBook Pro 16 M3 Max",
     browser: "Chrome 122.0",
@@ -28,9 +29,9 @@ const PRESET_USERS = [
     avatar: "👑"
   },
   {
-    label: "💼 Rahul (Executive - Downtown)",
+    label: "💼 Dhruv Chaudhary (Dwarka Exp. & Plots)",
     role: "AGENT",
-    email: "agent.rahul@apexrealty.com",
+    email: "dhruv@absoluteassets.in",
     pass: "AgentPass2026!",
     device: "Dell XPS 15 (Windows 11)",
     browser: "Chrome 122.0",
@@ -39,9 +40,9 @@ const PRESET_USERS = [
     avatar: "💻"
   },
   {
-    label: "💼 Ananya (Executive - Palm Grove)",
+    label: "💼 Ananya Patel (Golf Course Ext.)",
     role: "AGENT",
-    email: "agent.ananya@apexrealty.com",
+    email: "ananya@absoluteassets.in",
     pass: "AgentPass2026!",
     device: "Apple iPhone 15 Pro",
     browser: "Mobile Safari 18.2",
@@ -50,9 +51,9 @@ const PRESET_USERS = [
     avatar: "📱"
   },
   {
-    label: "💼 Vikram (Executive - Marina Bay)",
+    label: "💼 Vikram Malhotra (Sector 57 Retail)",
     role: "AGENT",
-    email: "agent.vikram@apexrealty.com",
+    email: "vikram@absoluteassets.in",
     pass: "AgentPass2026!",
     device: "Samsung Galaxy S24 Ultra",
     browser: "Chrome Mobile 122.0",
@@ -61,9 +62,9 @@ const PRESET_USERS = [
     avatar: "📱"
   },
   {
-    label: "💼 Karan (Executive - Bandra West)",
+    label: "💼 Karan Mehta (DLF Privana)",
     role: "AGENT",
-    email: "agent.karan@apexrealty.com",
+    email: "karan@absoluteassets.in",
     pass: "AgentPass2026!",
     device: "MacBook Pro 14 M3",
     browser: "Chrome 122.0",
@@ -112,7 +113,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setLoading(true);
 
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/auth/login`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,7 +161,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setLoading(true);
 
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/auth/verify-mfa`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/auth/verify-mfa`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -235,11 +236,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           }}>
             🏢
           </div>
-          <h2 style={{ fontSize: "1.55rem", fontWeight: "800", margin: "0 0 6px 0", letterSpacing: "-0.02em", color: theme.textPrimary }}>
-            Apex Sovereign
+          <h2 className="font-display-serif" style={{ fontSize: "1.9rem", fontWeight: "700", margin: "0 0 6px 0", letterSpacing: "0.02em", color: theme.textPrimary }}>
+            Absolute Assets
           </h2>
-          <p style={{ fontSize: "0.82rem", color: theme.textSecondary, margin: 0 }}>
-            Enterprise Real Estate CRM • Role-Based MFA Security Gateway
+          <p style={{ fontSize: "0.82rem", color: theme.goldAccent, margin: 0, fontWeight: "600" }}>
+            Consultancy With Absolute Clarity • Role-Based MFA Gateway
           </p>
         </div>
 
@@ -370,9 +371,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 width: "100%",
                 padding: "12px",
                 borderRadius: "12px",
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.textPrimary,
-                color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                border: `1px solid ${theme.goldBorder}`,
+                background: theme.primaryBtnBg,
+                color: theme.primaryBtnText,
                 fontWeight: "800",
                 fontSize: "0.88rem",
                 cursor: "pointer",
@@ -433,9 +434,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 width: "100%",
                 padding: "12px",
                 borderRadius: "12px",
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.textPrimary,
-                color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                border: `1px solid ${theme.goldBorder}`,
+                background: theme.primaryBtnBg,
+                color: theme.primaryBtnText,
                 fontWeight: "800",
                 fontSize: "0.88rem",
                 cursor: otpCode.length >= 6 ? "pointer" : "not-allowed",

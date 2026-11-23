@@ -1,8 +1,15 @@
 export type ThemeMode = "light" | "dark";
 
 export interface ThemeColors {
+  isDark: boolean;
   bg: string;
   headerBg: string;
+  sidebarBg: string;
+  sidebarBorder: string;
+  sidebarText: string;
+  sidebarTextMuted: string;
+  sidebarActiveBg: string;
+  sidebarActiveText: string;
   cardBg: string;
   cardBgSecondary: string;
   cardBgElevated: string;
@@ -20,7 +27,13 @@ export interface ThemeColors {
   accentHover: string;
   accentBg: string;
   crystalAccent: string;
-  // Harmonious, non-jarring semantic indicators matching the white/crystal aesthetic
+  goldAccent: string;
+  goldGradient: string;
+  goldBg: string;
+  goldBorder: string;
+  primaryBtnBg: string;
+  primaryBtnText: string;
+  emeraldSurface: string;
   success: string;
   successBg: string;
   successBorder: string;
@@ -32,85 +45,117 @@ export interface ThemeColors {
   dangerBorder: string;
   watermarkOpacity: number;
   tableHeaderBg: string;
+  tableHeaderText: string;
   tableRowHover: string;
 }
 
 export const themes: Record<ThemeMode, ThemeColors> = {
   light: {
-    // Pure White Crystal Glass: Luminous, pristine, frosted silver & specular crystal reflections
-    bg: "radial-gradient(ellipse at 15% 10%, rgba(240, 245, 255, 0.85) 0%, transparent 45%), radial-gradient(ellipse at 85% 90%, rgba(245, 247, 250, 0.9) 0%, transparent 50%), linear-gradient(135deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%)",
-    headerBg: "rgba(255, 255, 255, 0.82)",
-    cardBg: "rgba(255, 255, 255, 0.72)",
-    cardBgSecondary: "rgba(248, 250, 252, 0.75)",
-    cardBgElevated: "rgba(255, 255, 255, 0.92)",
-    glassBackdrop: "blur(24px) saturate(190%)",
-    glassBorder: "1px solid rgba(255, 255, 255, 0.95)",
-    glassBorderHighlight: "1px solid rgba(226, 232, 240, 0.8)",
-    glassShadow: "0 10px 35px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02), inset 0 1px 1px 0 rgba(255, 255, 255, 1)",
-    glassShadowGlow: "0 14px 40px -4px rgba(15, 23, 42, 0.08), inset 0 1px 2px 0 rgba(255, 255, 255, 1)",
-    border: "rgba(226, 232, 240, 0.85)",
-    borderSubtle: "rgba(241, 245, 249, 0.9)",
-    textPrimary: "#0f172a", // High contrast luxury deep slate
-    textSecondary: "#334155", // Balanced slate
-    textMuted: "#64748b",
-    accentPrimary: "#0f172a", // Monochromatic luxury slate primary
-    accentHover: "#1e293b",
-    accentBg: "rgba(15, 23, 42, 0.05)",
-    crystalAccent: "#2563eb", // Subtle crystalline sapphire for interactive focal dots
-    
-    // Subdued, elegant badges that harmonize with the white theme (no shouting red/green)
-    success: "#1e293b",
-    successBg: "rgba(15, 23, 42, 0.04)",
-    successBorder: "rgba(15, 23, 42, 0.12)",
+    isDark: false,
+    // Crisp Daylight Workspace with Familiar Dark Charcoal Sidebar & Teal-Emerald Accent
+    bg: "#F4F6F9",
+    headerBg: "#FFFFFF",
+    sidebarBg: "#151B23",
+    sidebarBorder: "rgba(255, 255, 255, 0.08)",
+    sidebarText: "#E2E8F0",
+    sidebarTextMuted: "#94A3B8",
+    sidebarActiveBg: "#1BA88E",
+    sidebarActiveText: "#FFFFFF",
+    cardBg: "#FFFFFF",
+    cardBgSecondary: "#F8FAFC",
+    cardBgElevated: "#FFFFFF",
+    glassBackdrop: "none",
+    glassBorder: "1px solid #E2E8F0",
+    glassBorderHighlight: "1px solid rgba(27, 168, 142, 0.45)",
+    glassShadow: "0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03)",
+    glassShadowGlow: "0 12px 28px -6px rgba(15, 23, 42, 0.14)",
+    border: "#E2E8F0",
+    borderSubtle: "#F1F5F9",
+    textPrimary: "#0F172A",
+    textSecondary: "#475569",
+    textMuted: "#64748B",
+    accentPrimary: "#1BA88E",
+    accentHover: "#158E78",
+    accentBg: "rgba(27, 168, 142, 0.10)",
+    crystalAccent: "#1BA88E",
 
-    warning: "#334155",
-    warningBg: "rgba(15, 23, 42, 0.04)",
-    warningBorder: "rgba(15, 23, 42, 0.12)",
+    goldAccent: "#0F8A73",
+    goldGradient: "linear-gradient(135deg, #1BA88E 0%, #148671 100%)",
+    goldBg: "rgba(27, 168, 142, 0.10)",
+    goldBorder: "rgba(27, 168, 142, 0.35)",
+    primaryBtnBg: "#1BA88E",
+    primaryBtnText: "#FFFFFF",
+    emeraldSurface: "#EDF7F5",
 
-    danger: "#1e293b",
-    dangerBg: "rgba(15, 23, 42, 0.04)",
-    dangerBorder: "rgba(15, 23, 42, 0.14)",
+    success: "#15803D",
+    successBg: "#F0FDF4",
+    successBorder: "#BBF7D0",
 
-    watermarkOpacity: 0.18,
-    tableHeaderBg: "rgba(248, 250, 252, 0.85)",
-    tableRowHover: "rgba(241, 245, 249, 0.65)"
+    warning: "#B45309",
+    warningBg: "#FFFBEB",
+    warningBorder: "#FDE68A",
+
+    danger: "#DC2626",
+    dangerBg: "#FEF2F2",
+    dangerBorder: "#FECACA",
+
+    watermarkOpacity: 0.05,
+    tableHeaderBg: "#1B2436",
+    tableHeaderText: "#F8FAFC",
+    tableRowHover: "#F8FAFC"
   },
   dark: {
-    // Obsidian Crystal Glass: Midnight glass with crystalline edge highlights
-    bg: "radial-gradient(ellipse at 15% 10%, rgba(20, 30, 50, 0.6) 0%, transparent 45%), radial-gradient(ellipse at 85% 90%, rgba(15, 23, 42, 0.7) 0%, transparent 50%), linear-gradient(135deg, #090d16 0%, #0d1322 45%, #080c14 100%)",
-    headerBg: "rgba(13, 19, 34, 0.82)",
-    cardBg: "rgba(17, 24, 39, 0.68)",
-    cardBgSecondary: "rgba(30, 41, 59, 0.52)",
-    cardBgElevated: "rgba(24, 33, 53, 0.85)",
-    glassBackdrop: "blur(24px) saturate(190%)",
-    glassBorder: "1px solid rgba(255, 255, 255, 0.12)",
-    glassBorderHighlight: "1px solid rgba(255, 255, 255, 0.2)",
-    glassShadow: "0 12px 36px 0 rgba(0, 0, 0, 0.55), inset 0 1px 1px 0 rgba(255, 255, 255, 0.12)",
-    glassShadowGlow: "0 16px 45px 0 rgba(0, 0, 0, 0.65), inset 0 1px 2px 0 rgba(255, 255, 255, 0.18)",
-    border: "rgba(51, 65, 85, 0.65)",
-    borderSubtle: "rgba(71, 85, 105, 0.45)",
-    textPrimary: "#f8fafc",
-    textSecondary: "#cbd5e1",
-    textMuted: "#94a3b8",
-    accentPrimary: "#f8fafc",
-    accentHover: "#e2e8f0",
-    accentBg: "rgba(255, 255, 255, 0.08)",
-    crystalAccent: "#38bdf8",
+    isDark: true,
+    // Deep Forest Slate & Teal-Gold Night Mode
+    bg: "#0B1218",
+    headerBg: "#111A22",
+    sidebarBg: "#0E151C",
+    sidebarBorder: "rgba(255, 255, 255, 0.08)",
+    sidebarText: "#E2E8F0",
+    sidebarTextMuted: "#94A3B8",
+    sidebarActiveBg: "#1BA88E",
+    sidebarActiveText: "#FFFFFF",
+    cardBg: "#131D26",
+    cardBgSecondary: "#192531",
+    cardBgElevated: "#192531",
+    glassBackdrop: "none",
+    glassBorder: "1px solid rgba(148, 163, 184, 0.16)",
+    glassBorderHighlight: "1px solid rgba(27, 168, 142, 0.45)",
+    glassShadow: "0 4px 16px rgba(0, 0, 0, 0.32)",
+    glassShadowGlow: "0 16px 36px rgba(0, 0, 0, 0.50)",
+    border: "rgba(148, 163, 184, 0.16)",
+    borderSubtle: "rgba(148, 163, 184, 0.10)",
+    textPrimary: "#F8FAFC",
+    textSecondary: "#CBD5E1",
+    textMuted: "#94A3B8",
+    accentPrimary: "#2DD4BF",
+    accentHover: "#14B8A6",
+    accentBg: "rgba(45, 212, 191, 0.12)",
+    crystalAccent: "#2DD4BF",
 
-    success: "#e2e8f0",
-    successBg: "rgba(255, 255, 255, 0.06)",
-    successBorder: "rgba(255, 255, 255, 0.15)",
+    goldAccent: "#2DD4BF",
+    goldGradient: "linear-gradient(135deg, #1BA88E 0%, #0F766E 100%)",
+    goldBg: "rgba(45, 212, 191, 0.12)",
+    goldBorder: "rgba(45, 212, 191, 0.36)",
+    primaryBtnBg: "#1BA88E",
+    primaryBtnText: "#FFFFFF",
+    emeraldSurface: "rgba(27, 168, 142, 0.14)",
 
-    warning: "#e2e8f0",
-    warningBg: "rgba(255, 255, 255, 0.06)",
-    warningBorder: "rgba(255, 255, 255, 0.15)",
+    success: "#4ADE80",
+    successBg: "rgba(34, 197, 94, 0.14)",
+    successBorder: "rgba(74, 222, 128, 0.28)",
 
-    danger: "#f8fafc",
-    dangerBg: "rgba(255, 255, 255, 0.06)",
-    dangerBorder: "rgba(255, 255, 255, 0.18)",
+    warning: "#FBBF24",
+    warningBg: "rgba(245, 158, 11, 0.14)",
+    warningBorder: "rgba(251, 191, 36, 0.30)",
 
-    watermarkOpacity: 0.18,
-    tableHeaderBg: "rgba(15, 23, 42, 0.85)",
-    tableRowHover: "rgba(30, 41, 59, 0.55)"
+    danger: "#F87171",
+    dangerBg: "rgba(239, 68, 68, 0.14)",
+    dangerBorder: "rgba(248, 113, 113, 0.30)",
+
+    watermarkOpacity: 0.05,
+    tableHeaderBg: "#0F172A",
+    tableHeaderText: "#F8FAFC",
+    tableRowHover: "rgba(255, 255, 255, 0.04)"
   }
 };

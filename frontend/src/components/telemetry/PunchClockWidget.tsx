@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface PunchClockProps {
   initialPunchedIn: boolean;
@@ -61,7 +62,7 @@ export const PunchClockWidget: React.FC<PunchClockProps> = ({
     const coords = await getCoordinates();
 
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/telemetry/punch`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/telemetry/punch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,7 +81,7 @@ export const PunchClockWidget: React.FC<PunchClockProps> = ({
         if (onPunchStatusChange) onPunchStatusChange(data.is_punched_in);
       }
     } catch (err) {
-      alert("Failed to update punch clock. Please check connectivity.");
+      console.error("Failed to update punch clock:", err);
     } finally {
       setLoading(false);
     }

@@ -1,20 +1,36 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ThemeColors } from "../../lib/theme";
-import { formatIndianCurrency, formatBudgetRange } from "../../lib/formatters";
+import { CallLogRecord } from "../../lib/mockData";
+import {
+  AD_CHANNEL_META,
+  AdChannel,
+  DISPOSITION_META,
+  getAdChannelMeta,
+  getDispositionMeta,
+  groupLeadsByDate,
+  LeadDisposition,
+  LeadSummaryFilterKey,
+  matchesSummaryFilter,
+  normalizeLeadChannel,
+  normalizeLeadDisposition
+} from "../../lib/leadAnalytics";
 
 export interface LeadItem {
   id: string;
+  lead_code?: string;
   full_name: string;
   phone_masked: string;
   email_masked?: string;
   source: string;
   status: string;
+  disposition?: LeadDisposition;
   property_type?: string;
   budget_min?: number;
   budget_max?: number;
   preferred_location?: string;
   notes?: string;
   assigned_agent_name?: string;
+  created_by_me?: boolean;
   sla_deadline?: string;
   is_sla_breached: boolean;
   estimated_brokerage?: number;
@@ -26,601 +42,798 @@ export interface LeadItem {
 
 interface LeadTableProps {
   leads: LeadItem[];
+  callLogs?: CallLogRecord[];
   theme: ThemeColors;
   onSelectLead: (lead: LeadItem) => void;
   onCallLead: (lead: LeadItem) => void;
+  onRequestExport?: () => void;
   token: string;
+  currentUserName?: string;
+  initialDispositionFilter?: LeadDisposition | "ALL";
+  initialSummaryFilter?: LeadSummaryFilterKey | null;
+  initialChannelFilter?: AdChannel | "ALL";
+  onClearExternalFilters?: () => void;
+  defaultViewMode?: "table" | "cards";
+}
+
+function formatCreatedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatCampaignSubtext(source: string, propertyType?: string): string {
+  const clean = source.replace(/_/g, " ").toLowerCase();
+  if (clean.includes("fb")) return propertyType ? `${propertyType} (FB Form)` : "Facebook Lead Form";
+  if (clean.includes("whatsapp")) return propertyType ? `${propertyType} (WhatsApp)` : "WhatsApp Inquiry";
+  if (clean.includes("ig") || clean.includes("instagram")) return propertyType ? `${propertyType} (IG Ad)` : "Instagram Ad";
+  if (clean.includes("linkedin")) return propertyType ? `${propertyType} (LinkedIn)` : "LinkedIn Form";
+  if (clean.includes("google")) return propertyType ? `${propertyType} (Google)` : "Google Search Ad";
+  return propertyType || "Direct Inquiry";
 }
 
 export const LeadTable: React.FC<LeadTableProps> = ({
   leads,
+  callLogs = [],
   theme,
   onSelectLead,
-  onCallLead
+  onCallLead,
+  onRequestExport,
+  currentUserName,
+  initialDispositionFilter = "ALL",
+  initialSummaryFilter = null,
+  initialChannelFilter = "ALL",
+  onClearExternalFilters,
+  defaultViewMode = "table"
 }) => {
-  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "cards">(defaultViewMode);
+  const [filterDisposition, setFilterDisposition] = useState<LeadDisposition | "ALL">(initialDispositionFilter);
+  const [summaryFilter, setSummaryFilter] = useState<LeadSummaryFilterKey | null>(initialSummaryFilter);
+  const [filterChannel, setFilterChannel] = useState<AdChannel | "ALL">(initialChannelFilter);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [riskFilterOnly, setRiskFilterOnly] = useState<boolean>(false);
+  const [flaggedOnly, setFlaggedOnly] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(25);
+  const pageSize = 15;
+
+  useEffect(() => {
+    setFilterDisposition(initialDispositionFilter);
+    setCurrentPage(1);
+  }, [initialDispositionFilter]);
+
+  useEffect(() => {
+    setSummaryFilter(initialSummaryFilter);
+    setCurrentPage(1);
+  }, [initialSummaryFilter]);
+
+  useEffect(() => {
+    setFilterChannel(initialChannelFilter);
+    setCurrentPage(1);
+  }, [initialChannelFilter]);
+
+  // Quick lookup for latest call duration per lead
+  const latestCallDurationByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const call of callLogs) {
+      const key = call.lead_name.toLowerCase();
+      if (!map.has(key) && call.duration_formatted) {
+        map.set(key, call.duration_formatted);
+      }
+    }
+    return map;
+  }, [callLogs]);
+
+  // Quick scope counts for the clean top tab strip (All / My Leads / Follow-Up / Site Visit / Call Not Pick / Booked)
+  const tabCounts = useMemo(() => {
+    return {
+      ALL: leads.length,
+      MY_CREATED: leads.filter((l) => matchesSummaryFilter(l, "MY_CREATED", currentUserName)).length,
+      FOLLOW_UP: leads.filter((l) => matchesSummaryFilter(l, "FOLLOW_UP", currentUserName)).length,
+      SITE_VISIT_DONE: leads.filter((l) => matchesSummaryFilter(l, "SITE_VISIT_DONE", currentUserName)).length,
+      NOT_YET_CONNECTED: leads.filter((l) => matchesSummaryFilter(l, "NOT_YET_CONNECTED", currentUserName)).length,
+      BOOKED: leads.filter((l) => matchesSummaryFilter(l, "BOOKED", currentUserName)).length
+    };
+  }, [leads, currentUserName]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
-      // 1. Status Filter
-      if (filterStatus !== "ALL" && l.status !== filterStatus) {
+      if (summaryFilter && summaryFilter !== "ALL") {
+        if (!matchesSummaryFilter(l, summaryFilter, currentUserName)) return false;
+      }
+      if (filterChannel !== "ALL") {
+        if (normalizeLeadChannel(l.source) !== filterChannel) return false;
+      }
+      if (filterDisposition !== "ALL") {
+        if (normalizeLeadDisposition(l) !== filterDisposition) return false;
+      }
+      if (
+        flaggedOnly &&
+        !l.offline_closing_flag &&
+        l.poaching_risk_score !== "CRITICAL" &&
+        l.poaching_risk_score !== "HIGH" &&
+        !l.is_sla_breached
+      ) {
         return false;
       }
-
-      // 2. Risk Filter
-      if (riskFilterOnly && !l.offline_closing_flag && l.poaching_risk_score !== "CRITICAL" && l.poaching_risk_score !== "HIGH") {
-        return false;
-      }
-
-      // 3. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesName = l.full_name?.toLowerCase().includes(q);
-        const matchesPhone = l.phone_masked?.toLowerCase().includes(q);
-        const matchesProp = l.property_type?.toLowerCase().includes(q);
-        const matchesLoc = l.preferred_location?.toLowerCase().includes(q);
-        const matchesAgent = l.assigned_agent_name?.toLowerCase().includes(q);
-        const matchesSource = l.source?.toLowerCase().includes(q);
-        if (!matchesName && !matchesPhone && !matchesProp && !matchesLoc && !matchesAgent && !matchesSource) {
-          return false;
-        }
+        const ch = getAdChannelMeta(normalizeLeadChannel(l.source));
+        const match =
+          l.full_name?.toLowerCase().includes(q) ||
+          l.lead_code?.toLowerCase().includes(q) ||
+          l.phone_masked?.toLowerCase().includes(q) ||
+          l.assigned_agent_name?.toLowerCase().includes(q) ||
+          l.property_type?.toLowerCase().includes(q) ||
+          l.preferred_location?.toLowerCase().includes(q) ||
+          ch.label.toLowerCase().includes(q) ||
+          l.source?.toLowerCase().includes(q);
+        if (!match) return false;
       }
-
       return true;
     });
-  }, [leads, filterStatus, riskFilterOnly, searchQuery]);
+  }, [leads, summaryFilter, filterChannel, filterDisposition, flaggedOnly, searchQuery, currentUserName]);
 
-  // Pagination slicing
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const paginatedLeads = useMemo(() => {
     const start = (safePage - 1) * pageSize;
     return filteredLeads.slice(start, start + pageSize);
-  }, [filteredLeads, safePage, pageSize]);
+  }, [filteredLeads, safePage]);
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-    }
+  const groupedDateLeads = useMemo(() => groupLeadsByDate(paginatedLeads), [paginatedLeads]);
+
+  const hasActiveFilters =
+    filterChannel !== "ALL" ||
+    filterDisposition !== "ALL" ||
+    (summaryFilter !== null && summaryFilter !== "ALL") ||
+    flaggedOnly ||
+    Boolean(searchQuery.trim());
+
+  const handleResetFilters = () => {
+    setFilterChannel("ALL");
+    setFilterDisposition("ALL");
+    setSummaryFilter(null);
+    setFlaggedOnly(false);
+    setSearchQuery("");
+    setCurrentPage(1);
+    if (onClearExternalFilters) onClearExternalFilters();
   };
 
-  // Refined SLA Badge (Subdued crystal glass styling matching the white theme)
-  const getSlaBadge = (lead: LeadItem) => {
-    if (lead.status !== "NEW") {
-      return (
-        <span style={{
-          fontSize: "0.72rem",
-          padding: "3px 9px",
-          borderRadius: "999px",
-          backgroundColor: theme.cardBgSecondary,
-          color: theme.textMuted,
-          fontWeight: "600",
-          border: `1px solid ${theme.border}`,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "4px"
-        }}>
-          <span>✓</span> Contacted
-        </span>
-      );
-    }
-    if (lead.is_sla_breached) {
-      return (
-        <span style={{
-          fontSize: "0.72rem",
-          padding: "3px 9px",
-          borderRadius: "999px",
-          backgroundColor: theme.cardBgElevated,
-          color: theme.textPrimary,
-          fontWeight: "700",
-          border: `1px solid ${theme.border}`,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "5px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
-        }}>
-          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.textSecondary, opacity: 0.8 }}></span>
-          SLA Escalated
-        </span>
-      );
-    }
-    return (
-      <span style={{
-        fontSize: "0.72rem",
-        padding: "3px 9px",
-        borderRadius: "999px",
-        backgroundColor: theme.cardBgElevated,
-        color: theme.textPrimary,
-        fontWeight: "700",
-        border: `1px solid ${theme.border}`,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "5px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
-      }}>
-        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.crystalAccent }}></span>
-        15m Active SLA
-      </span>
-    );
-  };
-
-  // Refined Source Badge
-  const getSourceBadge = (source: string) => {
-    let label = "Website Direct";
-    let icon = "🌐";
-    if (source.includes("FB")) {
-      label = "Meta FB Ad";
-      icon = "🎯";
-    } else if (source.includes("IG")) {
-      label = "Meta IG Lead";
-      icon = "📱";
-    }
-
-    return (
-      <span style={{
-        fontSize: "0.72rem",
-        padding: "3px 8px",
-        borderRadius: "6px",
-        backgroundColor: theme.cardBgSecondary,
-        color: theme.textSecondary,
-        fontWeight: "600",
-        border: `1px solid ${theme.border}`,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "5px"
-      }}>
-        <span>{icon}</span> {label}
-      </span>
-    );
-  };
+  const quickTabs: Array<{ key: LeadSummaryFilterKey; label: string; count: number }> = [
+    { key: "ALL", label: "All Leads", count: tabCounts.ALL },
+    { key: "MY_CREATED", label: "My Leads", count: tabCounts.MY_CREATED },
+    { key: "FOLLOW_UP", label: "Follow-Up", count: tabCounts.FOLLOW_UP },
+    { key: "SITE_VISIT_DONE", label: "Site Visit Done", count: tabCounts.SITE_VISIT_DONE },
+    { key: "NOT_YET_CONNECTED", label: "Call Not Pick", count: tabCounts.NOT_YET_CONNECTED },
+    { key: "BOOKED", label: "Booked", count: tabCounts.BOOKED }
+  ];
 
   return (
-    <div style={{
-      backgroundColor: theme.cardBg,
-      backdropFilter: theme.glassBackdrop,
-      WebkitBackdropFilter: theme.glassBackdrop,
-      borderRadius: "18px",
-      border: theme.glassBorder,
-      boxShadow: theme.glassShadow,
-      overflow: "hidden",
-      transition: "all 0.2s ease"
-    }}>
-      {/* Filter & Search Toolbar */}
-      <div style={{
-        padding: "18px 22px",
-        borderBottom: `1px solid ${theme.border}`,
-        display: "flex",
-        flexDirection: "column",
-        gap: "14px"
-      }}>
-        {/* Top Row: Title, Count, Search */}
-        <div style={{
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Clean Single-Row Quick Status Tabs (Simple version of LeadRat top tabs) */}
+      <div
+        role="tablist"
+        aria-label="Lead view filters"
+        style={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h2 style={{ fontSize: "1.08rem", fontWeight: "800", color: theme.textPrimary, margin: 0, letterSpacing: "-0.01em" }}>
-              Prospect Inquiries & Pipeline Ledger
-            </h2>
-            <span style={{
-              fontSize: "0.72rem",
-              backgroundColor: theme.cardBgSecondary,
-              color: theme.textSecondary,
-              padding: "3px 10px",
-              borderRadius: "999px",
-              fontWeight: "700",
-              border: `1px solid ${theme.border}`
-            }}>
-              {filteredLeads.length} of {leads.length} Leads
-            </span>
-          </div>
-
-          {/* Search Box */}
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 240px", maxWidth: "380px" }}>
-            <div style={{ position: "relative", width: "100%" }}>
-              <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "0.85rem", color: theme.textMuted }}>
-                🔍
-              </span>
-              <input
-                type="text"
-                placeholder="Search clients, properties, locations, agents..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px 9px 34px",
-                  borderRadius: "10px",
-                  border: `1px solid ${theme.border}`,
-                  backgroundColor: theme.cardBgElevated,
-                  color: theme.textPrimary,
-                  fontSize: "0.82rem",
-                  outline: "none",
-                  boxSizing: "border-box",
-                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)"
-                }}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  style={{
-                    position: "absolute",
-                    right: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    color: theme.textMuted,
-                    cursor: "pointer",
-                    fontSize: "0.8rem"
-                  }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Second Row: Status Filter Pills + Risk Toggle */}
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "10px"
-        }}>
-          {/* Status Segmented Control Buttons */}
-          <div style={{
-            display: "flex",
-            gap: "5px",
-            overflowX: "auto",
-            maxWidth: "100%",
-            paddingBottom: "4px"
-          }}>
-            {[
-              { id: "ALL", label: "All Leads" },
-              { id: "NEW", label: "New (15m SLA)" },
-              { id: "CONTACTED", label: "Contacted" },
-              { id: "SITE_VISIT_SCHEDULED", label: "Site Visit" },
-              { id: "NEGOTIATION", label: "Negotiation" },
-              { id: "WON", label: "Won (Closed)" },
-              { id: "LOST", label: "Lost" }
-            ].map((st) => {
-              const active = filterStatus === st.id;
-              return (
-                <button
-                  key={st.id}
-                  onClick={() => {
-                    setFilterStatus(st.id);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    fontSize: "0.74rem",
-                    padding: "6px 12px",
-                    borderRadius: "8px",
-                    border: `1px solid ${active ? theme.glassBorderHighlight || theme.border : theme.border}`,
-                    cursor: "pointer",
-                    backgroundColor: active ? theme.cardBgElevated : theme.cardBgSecondary,
-                    color: active ? theme.textPrimary : theme.textMuted,
-                    fontWeight: active ? "700" : "500",
-                    whiteSpace: "nowrap",
-                    boxShadow: active ? theme.glassShadow : "none",
-                    transition: "all 0.15s ease"
-                  }}
-                >
-                  {st.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Poaching Risk Toggle (Subdued crystal styling) */}
-          <button
-            onClick={() => {
-              setRiskFilterOnly(!riskFilterOnly);
-              setCurrentPage(1);
-            }}
-            style={{
-              fontSize: "0.74rem",
-              padding: "6px 14px",
-              borderRadius: "8px",
-              border: `1px solid ${riskFilterOnly ? theme.textPrimary : theme.border}`,
-              backgroundColor: riskFilterOnly ? theme.cardBgElevated : theme.cardBgSecondary,
-              color: theme.textPrimary,
-              fontWeight: "700",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              boxShadow: riskFilterOnly ? theme.glassShadow : "none",
-              transition: "all 0.15s ease"
-            }}
-          >
-            <span style={{ fontSize: "0.85rem" }}>🛡️</span>
-            <span>{riskFilterOnly ? "Showing Flagged Risks" : "Filter Flagged Risks"}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Leads Table Container with Touch Momentum Scrolling */}
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem", color: theme.textSecondary }}>
-          <thead>
-            <tr style={{
-              borderBottom: `1px solid ${theme.border}`,
-              backgroundColor: theme.tableHeaderBg,
-              color: theme.textMuted,
-              textTransform: "uppercase",
-              fontSize: "0.68rem",
-              letterSpacing: "0.04em",
-              fontWeight: "700"
-            }}>
-              <th style={{ padding: "12px 18px" }}>Prospect Client</th>
-              <th style={{ padding: "12px 18px" }}>Masked Phone (DLP)</th>
-              <th style={{ padding: "12px 18px" }}>Property Tier</th>
-              <th style={{ padding: "12px 18px" }}>Location</th>
-              <th style={{ padding: "12px 18px" }}>Budget / Brokerage</th>
-              <th style={{ padding: "12px 18px" }}>Source</th>
-              <th style={{ padding: "12px 18px" }}>SLA Status</th>
-              <th style={{ padding: "12px 18px" }}>Executive</th>
-              <th style={{ padding: "12px 18px", textAlign: "right" }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedLeads.length === 0 ? (
-              <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: "48px", color: theme.textMuted }}>
-                  No customer leads match the selected filter.
-                </td>
-              </tr>
-            ) : (
-              paginatedLeads.map((lead) => {
-                const brokerage = lead.estimated_brokerage || (lead.budget_max ? Math.round(lead.budget_max * 0.02) : 650000);
-                const hasTheft = lead.offline_closing_flag || lead.poaching_risk_score === "CRITICAL" || lead.poaching_risk_score === "HIGH";
-
-                return (
-                  <tr
-                    key={lead.id}
-                    onClick={() => onSelectLead(lead)}
-                    style={{
-                      borderBottom: `1px solid ${theme.border}`,
-                      transition: "background-color 0.15s ease",
-                      cursor: "pointer",
-                      backgroundColor: "transparent"
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.tableRowHover)}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-                  >
-                    {/* Prospect Name + Clean Risk Indicator */}
-                    <td style={{ padding: "13px 18px", fontWeight: "700", color: theme.textPrimary }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span>{lead.full_name}</span>
-                        {hasTheft && (
-                          <span style={{
-                            fontSize: "0.62rem",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            backgroundColor: theme.cardBgSecondary,
-                            color: theme.textPrimary,
-                            border: `1px solid ${theme.border}`,
-                            fontWeight: "700"
-                          }}>
-                            FLAGGED
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Masked Phone */}
-                    <td style={{ padding: "13px 18px", fontFamily: "monospace", color: theme.textSecondary, fontWeight: "600", whiteSpace: "nowrap" }}>
-                      🔒 {lead.phone_masked}
-                    </td>
-
-                    {/* Property Preference */}
-                    <td style={{ padding: "13px 18px", color: theme.textSecondary, whiteSpace: "nowrap" }}>
-                      {lead.property_type || "Apartment"}
-                    </td>
-
-                    {/* Location */}
-                    <td style={{ padding: "13px 18px", color: theme.textSecondary, whiteSpace: "nowrap" }}>
-                      📍 {lead.preferred_location || "Downtown"}
-                    </td>
-
-                    {/* Budget & 2% Brokerage */}
-                    <td style={{ padding: "13px 18px", whiteSpace: "nowrap" }}>
-                      <div style={{ fontWeight: "700", color: theme.textPrimary }}>
-                        {formatBudgetRange(lead.budget_min, lead.budget_max)}
-                      </div>
-                      <div style={{ fontSize: "0.7rem", color: theme.textMuted, fontWeight: "600", marginTop: "1px" }}>
-                        Brokerage: <span style={{ color: theme.textPrimary, fontWeight: "700" }}>{formatIndianCurrency(brokerage)}</span>
-                      </div>
-                    </td>
-
-                    {/* Source */}
-                    <td style={{ padding: "13px 18px", whiteSpace: "nowrap" }}>
-                      {getSourceBadge(lead.source)}
-                    </td>
-
-                    {/* SLA Monitor */}
-                    <td style={{ padding: "13px 18px", whiteSpace: "nowrap" }}>
-                      {getSlaBadge(lead)}
-                    </td>
-
-                    {/* Assigned Agent */}
-                    <td style={{ padding: "13px 18px", color: theme.textPrimary, fontWeight: "600", whiteSpace: "nowrap" }}>
-                      👤 {lead.assigned_agent_name || "Unassigned"}
-                    </td>
-
-                    {/* Click-to-Call Masked Bridge (Crystal Glass Button) */}
-                    <td style={{ padding: "13px 18px", textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCallLead(lead);
-                        }}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: `1px solid ${theme.border}`,
-                          backgroundColor: theme.cardBgElevated,
-                          color: theme.textPrimary,
-                          fontWeight: "700",
-                          fontSize: "0.74rem",
-                          cursor: "pointer",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          transition: "all 0.15s ease"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = theme.textPrimary;
-                          e.currentTarget.style.color = theme.bg.includes("#090d16") ? "#000000" : "#ffffff";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = theme.cardBgElevated;
-                          e.currentTarget.style.color = theme.textPrimary;
-                        }}
-                      >
-                        📞 Masked Call
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination Footer */}
-      <div style={{
-        padding: "14px 20px",
-        borderTop: `1px solid ${theme.border}`,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        backgroundColor: theme.cardBgSecondary,
-        flexWrap: "wrap",
-        gap: "12px"
-      }}>
-        {/* Page size selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.78rem", color: theme.textMuted }}>
-          <span>Show:</span>
-          {[25, 50, 100].map((size) => (
+          gap: "6px",
+          borderBottom: `1px solid ${theme.border}`,
+          overflowX: "auto",
+          paddingBottom: "2px"
+        }}
+      >
+        {quickTabs.map((tab) => {
+          const active =
+            (tab.key === "ALL" && (!summaryFilter || summaryFilter === "ALL") && filterDisposition === "ALL" && !flaggedOnly) ||
+            summaryFilter === tab.key;
+          return (
             <button
-              key={size}
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => {
-                setPageSize(size);
+                setSummaryFilter(tab.key === "ALL" ? null : tab.key);
+                setFilterDisposition("ALL");
+                setFlaggedOnly(false);
                 setCurrentPage(1);
               }}
               style={{
-                padding: "3px 9px",
-                borderRadius: "6px",
-                border: pageSize === size ? "none" : `1px solid ${theme.border}`,
-                backgroundColor: pageSize === size ? theme.textPrimary : "transparent",
-                color: pageSize === size ? (theme.bg.includes("#090d16") ? "#000000" : "#ffffff") : theme.textSecondary,
-                fontWeight: "700",
-                fontSize: "0.75rem",
+                background: "none",
+                border: "none",
+                borderBottom: active ? `2px solid ${theme.accentPrimary}` : "2px solid transparent",
+                padding: "9px 12px",
+                color: active ? theme.accentPrimary : theme.textSecondary,
+                fontSize: "0.84rem",
+                fontWeight: active ? 700 : 500,
                 cursor: "pointer",
-                transition: "all 0.15s ease"
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px"
               }}
             >
-              {size}
+              <span>{tab.label}</span>
+              <span
+                className="tabular-nums"
+                style={{
+                  fontSize: "0.75rem",
+                  color: active ? theme.accentPrimary : theme.textMuted,
+                  fontWeight: 600
+                }}
+              >
+                ({tab.count})
+              </span>
             </button>
-          ))}
-          <span>leads per page</span>
+          );
+        })}
+      </div>
+
+      {/* Single Clean Toolbar: Search + Ad Source Dropdown + Status Dropdown + Export + View Toggle */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", flex: "1 1 360px" }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search by name, mobile number, source, or agent..."
+            aria-label="Search leads"
+            style={{
+              flex: "1 1 240px",
+              minWidth: "200px",
+              padding: "9px 12px",
+              borderRadius: "8px",
+              border: `1px solid ${theme.border}`,
+              backgroundColor: theme.cardBg,
+              color: theme.textPrimary,
+              fontSize: "0.84rem",
+              outline: "none"
+            }}
+          />
+
+          <select
+            aria-label="Filter by ad source"
+            value={filterChannel}
+            onChange={(e) => {
+              setFilterChannel(e.target.value as AdChannel | "ALL");
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "9px 12px",
+              borderRadius: "8px",
+              border: `1px solid ${filterChannel !== "ALL" ? theme.accentPrimary : theme.border}`,
+              backgroundColor: theme.cardBg,
+              color: theme.textPrimary,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            <option value="ALL">All Ad Sources</option>
+            {AD_CHANNEL_META.map((ch) => (
+              <option key={ch.key} value={ch.key}>
+                {ch.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            aria-label="Filter by lead status"
+            value={filterDisposition}
+            onChange={(e) => {
+              setFilterDisposition(e.target.value as LeadDisposition | "ALL");
+              setSummaryFilter(null);
+              setCurrentPage(1);
+            }}
+            style={{
+              padding: "9px 12px",
+              borderRadius: "8px",
+              border: `1px solid ${filterDisposition !== "ALL" ? theme.accentPrimary : theme.border}`,
+              backgroundColor: theme.cardBg,
+              color: theme.textPrimary,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            <option value="ALL">All Statuses</option>
+            {DISPOSITION_META.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              style={{
+                padding: "8px 11px",
+                borderRadius: "8px",
+                border: `1px solid ${theme.border}`,
+                backgroundColor: theme.cardBgSecondary,
+                color: theme.textSecondary,
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Reset
+            </button>
+          )}
         </div>
 
-        {/* Page controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "0.78rem", color: theme.textMuted, marginRight: "8px" }}>
-            Page <strong style={{ color: theme.textPrimary }}>{safePage}</strong> of <strong style={{ color: theme.textPrimary }}>{totalPages}</strong>
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+          {onRequestExport && (
+            <button
+              type="button"
+              onClick={onRequestExport}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: theme.primaryBtnBg,
+                color: theme.primaryBtnText,
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }}
+            >
+              Export
+            </button>
+          )}
 
-          <button
-            onClick={() => handlePageChange(1)}
-            disabled={safePage === 1}
+          <div
             style={{
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: `1px solid ${theme.border}`,
-              backgroundColor: theme.cardBgElevated,
-              color: safePage === 1 ? theme.textMuted : theme.textPrimary,
-              cursor: safePage === 1 ? "not-allowed" : "pointer",
-              fontSize: "0.75rem",
-              fontWeight: "600",
-              opacity: safePage === 1 ? 0.5 : 1
+              display: "inline-flex",
+              padding: "2px",
+              borderRadius: "8px",
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.border}`
             }}
           >
-            « First
-          </button>
-
-          <button
-            onClick={() => handlePageChange(safePage - 1)}
-            disabled={safePage === 1}
-            style={{
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: `1px solid ${theme.border}`,
-              backgroundColor: theme.cardBgElevated,
-              color: safePage === 1 ? theme.textMuted : theme.textPrimary,
-              cursor: safePage === 1 ? "not-allowed" : "pointer",
-              fontSize: "0.75rem",
-              fontWeight: "600",
-              opacity: safePage === 1 ? 0.5 : 1
-            }}
-          >
-            ‹ Prev
-          </button>
-
-          <button
-            onClick={() => handlePageChange(safePage + 1)}
-            disabled={safePage >= totalPages}
-            style={{
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: `1px solid ${theme.border}`,
-              backgroundColor: theme.cardBgElevated,
-              color: safePage >= totalPages ? theme.textMuted : theme.textPrimary,
-              cursor: safePage >= totalPages ? "not-allowed" : "pointer",
-              fontSize: "0.75rem",
-              fontWeight: "600",
-              opacity: safePage >= totalPages ? 0.5 : 1
-            }}
-          >
-            Next ›
-          </button>
-
-          <button
-            onClick={() => handlePageChange(totalPages)}
-            disabled={safePage >= totalPages}
-            style={{
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: `1px solid ${theme.border}`,
-              backgroundColor: theme.cardBgElevated,
-              color: safePage >= totalPages ? theme.textMuted : theme.textPrimary,
-              cursor: safePage >= totalPages ? "not-allowed" : "pointer",
-              fontSize: "0.75rem",
-              fontWeight: "600",
-              opacity: safePage >= totalPages ? 0.5 : 1
-            }}
-          >
-            Last »
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              style={{
+                padding: "6px 11px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: viewMode === "table" ? theme.accentBg : "transparent",
+                color: viewMode === "table" ? theme.accentPrimary : theme.textMuted,
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              style={{
+                padding: "6px 11px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: viewMode === "cards" ? theme.accentBg : "transparent",
+                color: viewMode === "cards" ? theme.accentPrimary : theme.textMuted,
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Cards
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* BODY: FAMILIAR LEADRAT-STYLE CLEAN TABLE (DEFAULT) OR CARD FEED */}
+      {viewMode === "table" ? (
+        <div
+          style={{
+            backgroundColor: theme.cardBg,
+            borderRadius: "10px",
+            border: `1px solid ${theme.border}`,
+            boxShadow: theme.glassShadow,
+            overflow: "hidden"
+          }}
+        >
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                textAlign: "left",
+                fontSize: "0.84rem"
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    backgroundColor: theme.tableHeaderBg,
+                    color: theme.tableHeaderText,
+                    fontSize: "0.72rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    fontWeight: 700
+                  }}
+                >
+                  <th style={{ padding: "13px 16px" }}>Lead Name</th>
+                  <th style={{ padding: "13px 16px" }}>Created</th>
+                  <th style={{ padding: "13px 16px" }}>Assigned To</th>
+                  <th style={{ padding: "13px 16px" }}>Source &amp; Ad Campaign</th>
+                  <th style={{ padding: "13px 16px" }}>Status</th>
+                  <th style={{ padding: "13px 16px" }}>Call Duration</th>
+                  <th style={{ padding: "13px 16px", textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: "42px 16px", textAlign: "center", color: theme.textMuted }}>
+                      No leads match your current filter.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedLeads.map((lead) => {
+                    const channel = getAdChannelMeta(normalizeLeadChannel(lead.source));
+                    const disp = getDispositionMeta(normalizeLeadDisposition(lead));
+                    const duration = latestCallDurationByName.get(lead.full_name.toLowerCase()) || "—";
+                    const hasAlert =
+                      lead.offline_closing_flag ||
+                      lead.poaching_risk_score === "CRITICAL" ||
+                      lead.poaching_risk_score === "HIGH";
+
+                    return (
+                      <tr
+                        key={lead.id}
+                        onClick={() => onSelectLead(lead)}
+                        style={{
+                          borderBottom: `1px solid ${theme.borderSubtle}`,
+                          cursor: "pointer",
+                          transition: "background-color 0.12s ease"
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.tableRowHover)}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <td style={{ padding: "13px 16px", minWidth: "180px" }}>
+                          <div style={{ fontWeight: 700, color: theme.textPrimary, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 6px" }}>
+                            <span>{lead.full_name}</span>
+                            {hasAlert && (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  color: theme.danger,
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap"
+                                }}
+                              >
+                                · Alert
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="tabular-nums"
+                            style={{ fontSize: "0.75rem", color: theme.textMuted, marginTop: "2px" }}
+                          >
+                            {lead.phone_masked}
+                          </div>
+                        </td>
+
+                        <td
+                          className="tabular-nums"
+                          style={{ padding: "13px 16px", color: theme.textSecondary, whiteSpace: "nowrap", fontSize: "0.8rem" }}
+                        >
+                          {formatCreatedAt(lead.created_at)}
+                        </td>
+
+                        <td style={{ padding: "13px 16px", color: theme.textPrimary, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {lead.assigned_agent_name || "Unassigned"}
+                        </td>
+
+                        <td style={{ padding: "13px 16px", minWidth: "185px" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontWeight: 600, color: theme.textPrimary }}>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: "8px",
+                                height: "8px",
+                                borderRadius: "50%",
+                                backgroundColor: channel.color,
+                                flexShrink: 0
+                              }}
+                            />
+                            <span>{channel.label}</span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: theme.textMuted,
+                              marginTop: "2px",
+                              maxWidth: "220px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            {formatCampaignSubtext(lead.source, lead.property_type)}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              color: theme.isDark ? disp.pillTextDark : disp.color
+                            }}
+                          >
+                            {disp.label}
+                          </span>
+                        </td>
+
+                        <td
+                          className="tabular-nums"
+                          style={{ padding: "13px 16px", color: theme.textSecondary, fontWeight: 600, whiteSpace: "nowrap" }}
+                        >
+                          {duration}
+                        </td>
+
+                        <td style={{ padding: "13px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <button
+                              type="button"
+                              aria-label={`Call ${lead.full_name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onCallLead(lead);
+                              }}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "7px",
+                                border: `1px solid ${theme.successBorder}`,
+                                backgroundColor: theme.successBg,
+                                color: theme.success,
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                            >
+                              Call
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Preview ${lead.full_name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectLead(lead);
+                              }}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "7px",
+                                border: `1px solid ${theme.border}`,
+                                backgroundColor: theme.cardBgSecondary,
+                                color: theme.textPrimary,
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                cursor: "pointer"
+                              }}
+                            >
+                              Preview
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Simple Pagination Footer */}
+          <div
+            style={{
+              padding: "12px 16px",
+              borderTop: `1px solid ${theme.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "10px",
+              fontSize: "0.8rem",
+              color: theme.textMuted
+            }}
+          >
+            <span className="tabular-nums">
+              Showing {filteredLeads.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–
+              {Math.min(safePage * pageSize, filteredLeads.length)} of {filteredLeads.length} leads
+            </span>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                style={{
+                  padding: "5px 11px",
+                  borderRadius: "7px",
+                  border: `1px solid ${theme.border}`,
+                  backgroundColor: theme.cardBgSecondary,
+                  color: safePage <= 1 ? theme.textMuted : theme.textPrimary,
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: safePage <= 1 ? "not-allowed" : "pointer",
+                  opacity: safePage <= 1 ? 0.5 : 1
+                }}
+              >
+                Previous
+              </button>
+              <span className="tabular-nums" style={{ fontWeight: 600, color: theme.textSecondary }}>
+                Page {safePage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                style={{
+                  padding: "5px 11px",
+                  borderRadius: "7px",
+                  border: `1px solid ${theme.border}`,
+                  backgroundColor: theme.cardBgSecondary,
+                  color: safePage >= totalPages ? theme.textMuted : theme.textPrimary,
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: safePage >= totalPages ? "not-allowed" : "pointer",
+                  opacity: safePage >= totalPages ? 0.5 : 1
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* CLEAN CARD FEED VIEW (For quick mobile scanning) */
+        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+          {groupedDateLeads.length === 0 ? (
+            <div
+              style={{
+                backgroundColor: theme.cardBg,
+                border: `1px solid ${theme.border}`,
+                borderRadius: "12px",
+                padding: "40px 16px",
+                textAlign: "center",
+                color: theme.textMuted
+              }}
+            >
+              No leads match your current filter.
+            </div>
+          ) : (
+            groupedDateLeads.map((group) => (
+              <div key={group.dateKey}>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    color: theme.textMuted,
+                    marginBottom: "8px",
+                    display: "flex",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <span>{group.dateLabel}</span>
+                  <span className="tabular-nums">{group.leads.length} leads</span>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))",
+                    gap: "12px"
+                  }}
+                >
+                  {group.leads.map((lead) => {
+                    const disp = getDispositionMeta(normalizeLeadDisposition(lead));
+                    const channel = getAdChannelMeta(normalizeLeadChannel(lead.source));
+                    return (
+                      <div
+                        key={lead.id}
+                        onClick={() => onSelectLead(lead)}
+                        style={{
+                          backgroundColor: theme.cardBg,
+                          border: `1px solid ${theme.border}`,
+                          borderRadius: "12px",
+                          padding: "14px 16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: "0.95rem", fontWeight: 700, color: theme.textPrimary }}>
+                              {lead.full_name}
+                            </div>
+                            <div className="tabular-nums" style={{ fontSize: "0.76rem", color: theme.textMuted, marginTop: "2px" }}>
+                              {lead.phone_masked}
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              color: theme.isDark ? disp.pillTextDark : disp.color,
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            {disp.label}
+                          </span>
+                        </div>
+
+                        <div style={{ height: "1px", backgroundColor: theme.borderSubtle }} />
+
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: "0.84rem", fontWeight: 600, color: theme.textPrimary }}>
+                              {lead.property_type || "Residential Plots"}
+                            </div>
+                            <div style={{ fontSize: "0.76rem", color: theme.textMuted, marginTop: "3px" }}>
+                              {lead.assigned_agent_name || "Unassigned"} · {channel.shortLabel}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            aria-label={`Call ${lead.full_name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onCallLead(lead);
+                            }}
+                            style={{
+                              padding: "7px 12px",
+                              borderRadius: "8px",
+                              border: `1px solid ${theme.successBorder}`,
+                              backgroundColor: theme.successBg,
+                              color: theme.success,
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Call
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ThemeColors } from "../../lib/theme";
+import { apiFetch } from "../../lib/mockApi";
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export const ExportApprovalModal: React.FC<ExportModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const resp = await fetch(`${backendUrl}/api/v1/exports/request`, {
+      const resp = await apiFetch(`${backendUrl}/api/v1/exports/request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -227,9 +228,9 @@ export const ExportApprovalModal: React.FC<ExportModalProps> = ({
               style={{
                 padding: "8px 18px",
                 borderRadius: "8px",
-                border: `1px solid ${theme.border}`,
-                backgroundColor: theme.textPrimary,
-                color: theme.bg.includes("#090d16") ? "#000000" : "#ffffff",
+                border: `1px solid ${theme.goldBorder}`,
+                backgroundColor: theme.primaryBtnBg,
+                color: theme.primaryBtnText,
                 fontWeight: "700",
                 fontSize: "0.82rem",
                 cursor: isSubmitting ? "not-allowed" : "pointer",

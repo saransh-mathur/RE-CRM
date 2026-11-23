@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { apiFetch } from "../../lib/mockApi";
 
 interface AntiCopyContainerProps {
   children: React.ReactNode;
@@ -22,7 +23,7 @@ export const AntiCopyContainer: React.FC<AntiCopyContainerProps> = ({
           visibility: hidden !important;
         }
         body:after {
-          content: "CONFIDENTIAL PROPERTY OF APEX REALTY. UNAUTHORIZED PRINTING IS PROHIBITED AND MONITORED.";
+          content: "CONFIDENTIAL PROPERTY OF ABSOLUTE ASSETS. UNAUTHORIZED PRINTING IS PROHIBITED AND MONITORED.";
           display: block !important;
           visibility: visible !important;
           font-size: 24pt;
@@ -44,7 +45,6 @@ export const AntiCopyContainer: React.FC<AntiCopyContainerProps> = ({
         e.preventDefault();
         e.stopPropagation();
         reportDlpAlert("PRINT_ATTEMPTED", "HIGH", { key: e.key });
-        alert("⚠️ Printing is disabled under Apex Realty Data Loss Prevention policies.");
         return false;
       }
 
@@ -65,7 +65,7 @@ export const AntiCopyContainer: React.FC<AntiCopyContainerProps> = ({
     };
 
     const reportDlpAlert = (eventType: string, severity: string, details: Record<string, any>) => {
-      fetch(`${backendUrl}/api/v1/telemetry/report-alert`, {
+      apiFetch(`${backendUrl}/api/v1/telemetry/report-alert`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
